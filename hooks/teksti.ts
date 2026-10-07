@@ -124,7 +124,7 @@ tev: līdz 2 darbiem, kas jādara lietotājam pašam (lēmums, apstiprinājums, 
   sikak: 1 līdz 2 teikumi (līdz 250 zīmēm) ar konkrētām detaļām: kas tieši jāizlemj vai jāizdara, kāpēc, ar ko saistīts.
   atvert: absolūts faila ceļš vai https saite tieši no konteksta, kas palīdz šo darbu izdarīt (brīfs, melnraksts, scenārijs). Tukšs, ja kontekstā tāda nav. Nekad neizdomā ceļus.
 claude: ne vairāk kā 1 darbs, ko Claude var izdarīt pats bez lietotāja, un bieži neviens.
-  Tikai konkrēts, atsevišķs darbs, kas sarunā vēl nav iesākts. Nekad "Turpini…" vai "Pabeidz…" darbu, ko Claude jau dara vai tikko izdarīja; ja pēdējās ziņās Claude pie tā strādā vai sola to darīt, claude ir tukšs.
+  Tikai konkrēts, atsevišķs darbs, kas sarunā vēl nav iesākts un ko Claude var izdarīt pats ar saviem rīkiem, bez lietotāja klikšķiem aplikācijā, pārlūkā vai telefonā. Pārbaudes, kurām vajag lietotāju ("pārbaudi dzīvajā aplikācijā", "uzspied", "apskaties"), ir tev darbs vai nav nekas. Nekad "Turpini…" vai "Pabeidz…" darbu, ko Claude jau dara vai tikko izdarīja; ja pēdējās ziņās Claude pie tā strādā vai sola to darīt, claude ir tukšs.
   darbs: līdz 60 zīmēm, darbības vārds pavēles izteiksmē.
   prompts: īsa ziņa latviski (līdz 200 zīmēm), ko nosūtīt tajā sesijā, lai Claude to izdarītu, piemēram "Izveido CRM lapas Team un Team Weekly un pasaki, kur tās ir."
 pabeigts: true, ja nekas vairs nav jādara; tad tev un claude ir tukši.
@@ -262,7 +262,7 @@ tev: up to 2 tasks the user must do themselves (a decision, an approval, a passw
   sikak: 1 to 2 sentences (up to 250 characters) with concrete details: what exactly, why, what it relates to.
   atvert: an absolute file path or https link taken from the context that helps with this task (brief, draft, script). Empty if there is none. Never invent paths.
 claude: at most 1 task Claude can do on its own, and often none.
-  Only a concrete, separate task not yet started in the conversation. Never "Continue…" or "Finish…" work Claude is already doing or just did; if the latest messages show Claude working on it or promising to, claude is empty.
+  Only a concrete, separate task not yet started in the conversation that Claude can do with its own tools, without the user clicking in the app, a browser or a phone. Checks that need the user ("check in the live app", "click", "look at") are a tev task or nothing. Never "Continue…" or "Finish…" work Claude is already doing or just did; if the latest messages show Claude working on it or promising to, claude is empty.
   darbs: up to 60 characters, imperative verb.
   prompts: a short message in English (up to 200 characters) to send in that session so Claude does it, for example "Build the Team and Team Weekly CRM pages and tell me where they are."
 pabeigts: true if nothing is left to do; then tev and claude are empty.

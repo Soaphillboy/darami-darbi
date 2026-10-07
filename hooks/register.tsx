@@ -269,6 +269,7 @@ async function atjaunot($: EngineInterface): Promise<void> {
 
   // Analīzes, atzīmes un ķeksīši var būt mainīti citā sesijā: paņem kopīgo stāvokli no krātuves.
   await pievienotNoFaila($, j.sesijas)
+  await izpilditKomandu($)
   const an = await apgrieztClaude($, (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {})
   const a = (await lasitStore<Atzimes>($, STORE_ATZIMES)) ?? {}
   const iz = (await lasitStore<Izdariti>($, STORE_IZDARITI)) ?? {}
@@ -296,7 +297,9 @@ async function atjaunot($: EngineInterface): Promise<void> {
   const padomi = (await lasitStore<boolean>($, STORE_PADOMI)) ?? radiPadomusNoklusejums
   await update($, radiPadomus, () => padomi)
   const g = grupet(j.sesijas, a, an, iz, at, sec)
-  void autoAnalize($, [...g.gaida, ...g.turpinat], now)
+  // Kartītes, kurām .komanda.json lika pārbaudīt no jauna (last 0), pārbauda arī tad, ja tās tagad ir pabeigtajās.
+  const piespiestas = j.sesijas.filter(s => an[s.id]?.isGatava && an[s.id]?.last === 0)
+  void autoAnalize($, [...new Set([...g.gaida, ...g.turpinat, ...piespiestas])], now)
 
   const dalas = []
   if (g.gaida.length) dalas.push(t.statussGaida(g.gaida.length))
@@ -574,6 +577,36 @@ async function atmestClaude($: EngineInterface, s: Sesija, c: ClaudeDarbs): Prom
   await update($, analizes, () => visas)
   const atmesti = (await lasitStore<Record<string, string[]>>($, STORE_ATMESTI)) ?? {}
   await $.store.set(STORE_ATMESTI, { ...atmesti, [s.id]: [...(atmesti[s.id] ?? []), c.darbs].slice(-20) })
+}
+
+/**
+ * `.komanda.json` mapē: vienreizējas komandas visām kartītēm (atsevišķs fails, jo `.pievienot.json` var paņemt
+ * sesija ar vecāku moda versiju, kas jaunas komandas nezina). Formāts: { "tiritClaude": true, "parbauditVisas": true }.
+ * `tiritClaude` izņem visus nepalaistos Claude darbus; `parbauditVisas` liek analīzei visas sesijas pārbaudīt no jauna
+ * (tavi ☐ darbi paliek). Pēc izpildes fails tiek izdzēsts.
+ */
+async function izpilditKomandu($: EngineInterface): Promise<void> {
+  const cels = `${$.plugin.root}/.komanda.json`
+  if (!(await $.fs.exists(cels))) return
+  let k: { tiritClaude?: boolean; parbauditVisas?: boolean } = {}
+  try {
+    k = JSON.parse(await $.fs.read(cels)) as typeof k
+  } catch {
+    k = {}
+  }
+  await $.process.run(['/bin/rm', '-f', cels])
+  if (!k.tiritClaude && !k.parbauditVisas) return
+  const visas = (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {}
+  for (const [id, r] of Object.entries(visas)) {
+    // Ar abām komandām no jauna pārbauda tieši tās kartītes, kurām Claude darbi tika noņemti.
+    const isParbaudit = k.parbauditVisas && (!k.tiritClaude || r.claude.length > 0)
+    visas[id] = {
+      ...r,
+      ...(k.tiritClaude ? { claude: [] } : {}),
+      ...(isParbaudit ? { last: 0 } : {}),
+    }
+  }
+  await $.store.set(STORE_ANALIZES, visas)
 }
 
 async function saglabatAtskaiti($: EngineInterface, sesijasId: string, atskaite: Atskaite | undefined): Promise<void> {

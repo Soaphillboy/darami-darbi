@@ -766,3 +766,21 @@ test('kartītē ne vairāk kā 2 nepalaisti Claude darbi, arī vecajās analīz�
   expect(an.t?.claude.map(x => x.darbs)).toEqual(['V3', 'V4'])
   await ui.unmount()
 })
+
+test('.komanda.json notīra Claude darbus un liek visas sesijas pārbaudīt no jauna; ☐ paliek', async ($, on) => {
+  const faili: Record<string, string> = {}
+  const d = dzinejs(on, { faili })
+  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+  await ui.press({ key: 'atjaunot' } as any)
+  const pirms = d.jautajumi.length
+  faili['.komanda.json'] = JSON.stringify({ tiritClaude: true, parbauditVisas: true })
+  await ui.press({ key: 'atjaunot' } as any)
+  delete faili['.komanda.json']
+  expect(d.palaisti.some(a => a[0] === '/bin/rm' && String(a[2]).endsWith('.komanda.json'))).toBe(true)
+  // Pārbaudīja no jauna (a, t, c), ☐ palika, Claude darbi tikai no jaunās analīzes.
+  expect(d.jautajumi.length).toBe(pirms + 3)
+  const an = d.krātuve.get('analizes3') as Record<string, { tev: { darbs: string }[]; claude: { darbs: string }[] }>
+  expect(an.a?.tev.map(x => x.darbs)).toEqual(['Izlem par domēniem', 'Ievadi paroli'])
+  expect(an.a?.claude.map(x => x.darbs)).toEqual(['Izveidot CRM lapas'])
+  await ui.unmount()
+})
