@@ -680,7 +680,9 @@ test('➤ pie tava ☐ darba to nodod Claude tajā sesijā un pārvērš par Cla
   await ui.press({ key: 'nodot:a:0' } as any)
   const zina = d.suti.at(-1) as { session_id: string; message: string }
   expect(zina.session_id).toBe('a')
-  expect(zina.message).toContain('Izdari: Izlem par domēniem')
+  expect(zina.message).toContain('Palīdzi man izdarīt: Izlem par domēniem')
+  expect(zina.message).toContain('Klientam jāizvēlas divi no četriem domēniem')
+  expect(zina.message).toContain('soli pa solim')
   const an = d.krātuve.get('analizes3') as Record<string, { tev: { darbs: string }[]; claude: { darbs: string }[] }>
   expect(an.a?.tev.map(x => x.darbs)).toEqual(['Ievadi paroli'])
   expect(an.a?.claude.map(x => x.darbs)).toContain('Izlem par domēniem')
@@ -714,4 +716,34 @@ test('angļu valoda: panelis, padomi un sesijām sūtītie teksti angliski', { o
   expect(zina).toContain('Anna did and checked:')
   expect(zina).toContain('Continue your work.')
   await ui.unmount()
+})
+
+test('no analīzes ne vairāk kā 1 Claude darbs; kamēr gaida ▷ atskaiti, jaunus nepiedāvā', async ($, on) => {
+  const d = dzinejs(on)
+  const veca = ANALIZES['Sesija t']
+  ANALIZES['Sesija t'] = {
+    tev: [],
+    claude: [
+      { darbs: 'Pirmais', prompts: 'Izdari pirmo.' },
+      { darbs: 'Otrais', prompts: 'Izdari otro.' },
+    ],
+    pabeigts: false,
+  }
+  const sesijaT = DATI.sesijas[1] as { last: number }
+  try {
+    const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+    await ui.press({ key: 'atjaunot' } as any)
+    const an = () => (d.krātuve.get('analizes3') as Record<string, { claude: { darbs: string }[] }>).t?.claude.map(x => x.darbs)
+    expect(an()).toEqual(['Pirmais'])
+    // ▷ aizsūtīts, atskaite vēl nav: sesijā kaut kas notiek, bet jauns Claude darbs nenāk klāt.
+    await ui.press({ key: 'turpini:t:0' } as any)
+    ANALIZES['Sesija t'] = { tev: [], claude: [{ darbs: 'Trešais', prompts: 'Izdari trešo.' }], pabeigts: false }
+    sesijaT.last = 10
+    await ui.press({ key: 'atjaunot' } as any)
+    expect(an()).toEqual(['Pirmais'])
+    await ui.unmount()
+  } finally {
+    ANALIZES['Sesija t'] = veca
+    sesijaT.last = 5
+  }
 })

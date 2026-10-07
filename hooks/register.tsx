@@ -207,7 +207,7 @@ function parsetAnalizi(text: string): Pick<Analize, 'tev' | 'claude' | 'isPabeig
       }))
     const claude = (Array.isArray(j.claude) ? j.claude : [])
       .filter(d => typeof d?.darbs === 'string' && typeof d?.prompts === 'string' && d.prompts.trim() !== '')
-      .slice(0, 2)
+      .slice(0, 1)
       .map(d => ({ darbs: isis(String(d.darbs), 100), prompts: String(d.prompts).trim().slice(0, 400) }))
     return { tev, claude, isPabeigts: j.pabeigts === true }
   } catch {
@@ -362,11 +362,15 @@ async function analizet($: EngineInterface, s: Sesija, isPiespiedu: boolean): Pr
       // Neatzīmētie ☐ un nepalaistie ▷ paliek, līdz lietotājs tos atzīmē vai palaiž; jaunie nāk klāt.
       const tev = [...atvertie, ...parbauditi].slice(0, 6)
       const atmesti = ((await lasitStore<Record<string, string[]>>($, STORE_ATMESTI)) ?? {})[s.id] ?? []
+      // Sesija vēl strādā pie ▷ uzdevuma (atskaite nav atnākusi): jaunus Claude darbus tai nepiedāvā.
+      const isStrada = ((await lasitStore<Record<string, number>>($, STORE_GAIDA_ATSKAITI)) ?? {})[s.id] !== undefined
       const claude = [
         ...atvertieClaude,
-        ...parsets.claude.filter(
-          n => !vecieClaude.some(v => lidzigs(v.darbs, n.darbs)) && !atmesti.some(x => lidzigs(x, n.darbs)),
-        ),
+        ...(isStrada
+          ? []
+          : parsets.claude.filter(
+              n => !vecieClaude.some(v => lidzigs(v.darbs, n.darbs)) && !atmesti.some(x => lidzigs(x, n.darbs)),
+            )),
       ].slice(0, 4)
       visas[s.id] = {
         last: s.last,
@@ -750,7 +754,7 @@ export const register: Register = (on, options) => {
     }
     // ➤ pie tava ☐ darba: nosūta to Claude tajā sesijā un pārvērš par Claude ✓ ("nodots").
     const nodotClaude = (s: Sesija, td: TevDarbs) => async () => {
-      const prompts = [t.izdari(td.darbs), td.sikak].filter(Boolean).join('\n')
+      const prompts = t.izdari(td.darbs, td.sikak)
       if (!(await sutitSesijai(s, prompts))) return
       const visas = (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {}
       const r = visas[s.id]

@@ -101,7 +101,14 @@ const lv = {
   padomiIzslegti: 'Padomi izslēgti.',
 
   // Sesijām nosūtāmie teksti.
-  izdari: (darbs: string) => `Izdari: ${darbs}`,
+  izdari: (darbs: string, sikak: string) =>
+    [
+      `Palīdzi man izdarīt: ${darbs}`,
+      sikak,
+      'Ja vari izdarīt pats, izdari. Ja vajag mani (parole, piekļuve, lēmums), pasaki soli pa solim, kas man jādara.',
+    ]
+      .filter(Boolean)
+      .join('\n'),
   izdarijaUnParbaudija: (vards: string) => `${vards || 'Lietotājs'} izdarīja un pārbaudīja:`,
   turpiniDarbu: 'Turpini darbu.',
   piezime: (vards: string, darbi: string[]) =>
@@ -120,9 +127,10 @@ tev: līdz 2 darbiem, kas jādara lietotājam pašam (lēmums, apstiprinājums, 
   darbs: līdz 60 zīmēm, sākas ar darbības vārdu pavēles izteiksmē (Izlem, Apstiprini, Pārskati, Sagatavo, Piezvani).
   sikak: 1 līdz 2 teikumi (līdz 250 zīmēm) ar konkrētām detaļām: kas tieši jāizlemj vai jāizdara, kāpēc, ar ko saistīts.
   atvert: absolūts faila ceļš vai https saite tieši no konteksta, kas palīdz šo darbu izdarīt (brīfs, melnraksts, scenārijs). Tukšs, ja kontekstā tāda nav. Nekad neizdomā ceļus.
-claude: līdz 2 darbiem, ko Claude var izdarīt pats bez lietotāja.
+claude: ne vairāk kā 1 darbs, ko Claude var izdarīt pats bez lietotāja, un bieži neviens.
+  Tikai konkrēts, atsevišķs darbs, kas sarunā vēl nav iesākts. Nekad "Turpini…" vai "Pabeidz…" darbu, ko Claude jau dara vai tikko izdarīja; ja pēdējās ziņās Claude pie tā strādā vai sola to darīt, claude ir tukšs.
   darbs: līdz 60 zīmēm, darbības vārds pavēles izteiksmē.
-  prompts: īsa ziņa latviski (līdz 200 zīmēm), ko nosūtīt tajā sesijā, lai Claude to izdarītu, piemēram "Turpini: izveido CRM lapas Team un Team Weekly."
+  prompts: īsa ziņa latviski (līdz 200 zīmēm), ko nosūtīt tajā sesijā, lai Claude to izdarītu, piemēram "Izveido CRM lapas Team un Team Weekly un pasaki, kur tās ir."
 pabeigts: true, ja nekas vairs nav jādara; tad tev un claude ir tukši.
 Liec tikai šīs sesijas paša darbus. Darbi, kas pieder citai sesijai vai tās projektam (piemēram, no citas sesijas atskaites vai jautājums par citas sesijas failiem), te nepieder: neliec tos.
 Ja promptā ir lietotāja jau esošie neizdarītie darbi, tie paliek viņa sarakstā: neatkārto un nepārfrāzē tos, tev liec tikai jaunus.
@@ -236,7 +244,14 @@ const en: Teksti = {
   padomiIeslegti: 'Hints on.',
   padomiIzslegti: 'Hints off.',
 
-  izdari: (darbs: string) => `Do this: ${darbs}`,
+  izdari: (darbs: string, sikak: string) =>
+    [
+      `Help me get this done: ${darbs}`,
+      sikak,
+      'If you can do it yourself, do it. If you need me (a password, access, a decision), tell me step by step what to do.',
+    ]
+      .filter(Boolean)
+      .join('\n'),
   izdarijaUnParbaudija: (vards: string) => `${vards || 'The user'} did and checked:`,
   turpiniDarbu: 'Continue your work.',
   piezime: (vards: string, darbi: string[]) =>
@@ -254,9 +269,10 @@ tev: up to 2 tasks the user must do themselves (a decision, an approval, a passw
   darbs: up to 60 characters, starts with an imperative verb (Decide, Approve, Review, Prepare, Call).
   sikak: 1 to 2 sentences (up to 250 characters) with concrete details: what exactly, why, what it relates to.
   atvert: an absolute file path or https link taken from the context that helps with this task (brief, draft, script). Empty if there is none. Never invent paths.
-claude: up to 2 tasks Claude can do on its own.
+claude: at most 1 task Claude can do on its own, and often none.
+  Only a concrete, separate task not yet started in the conversation. Never "Continue…" or "Finish…" work Claude is already doing or just did; if the latest messages show Claude working on it or promising to, claude is empty.
   darbs: up to 60 characters, imperative verb.
-  prompts: a short message in English (up to 200 characters) to send in that session so Claude does it, for example "Continue: build the Team and Team Weekly CRM pages."
+  prompts: a short message in English (up to 200 characters) to send in that session so Claude does it, for example "Build the Team and Team Weekly CRM pages and tell me where they are."
 pabeigts: true if nothing is left to do; then tev and claude are empty.
 Only this session's own tasks. Tasks that belong to another session or its project (for example from another session's report) do not belong here.
 If the prompt lists the user's existing open tasks, they stay on the list: do not repeat or rephrase them, put only new ones in tev.
