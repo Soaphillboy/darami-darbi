@@ -79,8 +79,10 @@ function dzinejs(on: any, opts: { suta?: unknown; faili?: Record<string, string>
     konteksti.push(e.context)
     return { text: e.text } as any
   })
+  on('turn.complete', async ($: any, e: any) => ({ text: e.answer }) as any)
   on('process.run', async ($: any, e: any) => {
     palaisti.push([...e.argv])
+    if (e.argv[0] === '/usr/bin/printenv') return { value: { exitCode: 0, stdout: '/Users/es\n', stderr: '' } } as any
     const stdout = e.argv[1]?.endsWith('konteksts.py') ? 'konteksts' : JSON.stringify(DATI)
     return { value: { exitCode: 0, stdout, stderr: '' } } as any
   })
@@ -88,6 +90,11 @@ function dzinejs(on: any, opts: { suta?: unknown; faili?: Record<string, string>
 }
 
 const atrodi = (ui: any, key: string) => ui.find({ key } as any)
+// Darbs, ko hooks atstāj fonā (void), testā jāpagaida.
+const pagaidi = async (kamer: () => boolean = () => false, ms = 400) => {
+  for (let i = 0; i < ms / 10 && !kamer(); i++) await new Promise(r => (globalThis as any).setTimeout(r, 10))
+}
+const GAJIENS = { reason: 'answer', answer: 'Nosūtīju.', durationMs: 1, isAborted: false, turnId: 't1' }
 const teksts = (ui: any, re: RegExp) => ui.find({ type: 'Text', text: re } as any)
 
 test('tukšs panelis zīmējas abās virsmās', async $ => {
@@ -148,7 +155,7 @@ test('Claude ▷ palaiž darbu tajā sesijā vienreiz', async ($, on) => {
   await ui.unmount()
 })
 
-test('kārtots pēc pēdējās aktivitātes ar datumu virsrakstiem; ✓ paslēpj', async ($, on) => {
+test('kārtots pēc pēdējās aktivitātes ar datumu virsrakstiem; ✕ paslēpj', async ($, on) => {
   dzinejs(on)
   const diena = 86_400_000
   const tagad = 1791300000000
@@ -177,7 +184,7 @@ test('kārtots pēc pēdējās aktivitātes ar datumu virsrakstiem; ✓ paslēpj
   }
 })
 
-test('✓ nepārraksta citas sesijas atzīmes ar vecu kopiju', async ($, on) => {
+test('✕ nepārraksta citas sesijas atzīmes ar vecu kopiju', async ($, on) => {
   const { krātuve } = dzinejs(on)
   const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
   await ui.press({ key: 'atjaunot' } as any)
@@ -198,6 +205,26 @@ test('↑ pie pabeigtas sesijas to atgriež un uzreiz pārbauda', async ($, on) 
   expect(d.jautajumi.length).toBe(pirms + 1)
   expect(await atrodi(ui, 'keksis:b:0')).toBeDefined()
   await ui.unmount()
+})
+
+test('ar ↑ atgriezta kartīte bez darbiem pēc jaunākas analīzes iet uz pabeigtajām', async ($, on) => {
+  const { krātuve } = dzinejs(on)
+  const tuksa = { last: 5, sakts: 10, isGatava: true, tev: [], claude: [], isPabeigts: true }
+  krātuve.set('analizes3', { b: tuksa })
+  // Analīze ir vecāka par ↑: kartīte vēl gaida pārbaudi sarakstā.
+  krātuve.set('atzimes', { b: { veids: 'turpinat', last: 5, kad: 20 } })
+  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+  await ui.press({ key: 'atjaunot' } as any)
+  expect(await atrodi(ui, 'gatavs:b')).toBeDefined()
+  await ui.unmount()
+  // Analīze pēc ↑ (arī vecā atzīme bez laika) neatrada neko darāmu: nav "Claude var turpināt".
+  krātuve.set('atzimes', { b: { veids: 'turpinat', last: 5 } })
+  const ui2 = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+  await ui2.press({ key: 'atjaunot' } as any)
+  expect(await atrodi(ui2, 'gatavs:b')).toBeUndefined()
+  await ui2.press({ key: 'radit-pabeigtas' } as any)
+  expect(await atrodi(ui2, 'atgriezt:b')).toBeDefined()
+  await ui2.unmount()
 })
 
 test('Arhivēt parāda aplikācijas atteikumu, nevis klusi "Arhivēts"', async ($, on) => {
@@ -343,7 +370,7 @@ test('jauna analīze nenoņem neatzīmētos Tev darbus, tikai pieliek jaunus', a
   sesijaA.last = 10
   try {
     await ui.press({ key: 'atjaunot' } as any)
-    expect(d.jautajumi.at(-1)).toContain('- Ievadi paroli')
+    expect(d.jautajumi.at(-1)).toContain('1. Ievadi paroli')
     const an = (d.krātuve.get('analizes3') as Record<string, { tev: { darbs: string }[] }>).a
     // Neatzīmētais paliek, atzīmētais neatgriežas, jaunais pievienots.
     expect(an?.tev.map(x => x.darbs)).toEqual(['Ievadi paroli', 'Atbildi klientam'])
@@ -476,7 +503,7 @@ test('pogām ir padomi, kas parādās, uzbraucot ar peli', async ($, on) => {
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface, ...PANE } as any)
     await ui.press({ key: 'atjaunot' } as any)
-    for (const padoms of [/^ Gatavs $/, /^ Atmest $/, /^ Palaist $/, /^ Izdarīts $/, /^ Atvērt sesiju $/]) {
+    for (const padoms of [/^ Paslēpt $/, /^ Atmest $/, /^ Palaist $/, /^ Izdarīts $/, /^ Atvērt sesiju $/]) {
       expect(await teksts(ui, padoms)).toBeDefined()
     }
     await ui.unmount()
@@ -487,11 +514,11 @@ test('/darbi padomi pārslēdz padomus un atceras to krātuvē', async ($, on) =
   const d = dzinejs(on)
   const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
   await ui.press({ key: 'atjaunot' } as any)
-  expect(await teksts(ui, /^ Gatavs $/)).toBeDefined()
+  expect(await teksts(ui, /^ Paslēpt $/)).toBeDefined()
   const r = await ($ as any).command.run({ command: 'darbi', args: 'padomi' })
   expect(JSON.stringify(r)).toContain('izslēgti')
   expect(d.krātuve.get('padomi')).toBe(false)
-  expect(await teksts(ui, /^ Gatavs $/)).toBeUndefined()
+  expect(await teksts(ui, /^ Paslēpt $/)).toBeUndefined()
   await ($ as any).command.run({ command: 'darbi', args: 'padomi' })
   expect(d.krātuve.get('padomi')).toBe(true)
   await ui.unmount()
@@ -501,7 +528,7 @@ test('ar izslēgtiem padomiem tie netiek zīmēti', { options: { radiPadomus: fa
   dzinejs(on)
   const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
   await ui.press({ key: 'atjaunot' } as any)
-  expect(await teksts(ui, /^ Gatavs $/)).toBeUndefined()
+  expect(await teksts(ui, /^ Paslēpt $/)).toBeUndefined()
   expect(await atrodi(ui, 'gatavs:a')).toBeDefined()
   await ui.unmount()
 })
@@ -810,4 +837,102 @@ test('punkts nepulsē, ja darbi tikai pazuda (piemēram, notīrīti Claude darbi
   delete faili['.komanda.json']
   expect(await jauns()).toBeUndefined()
   await ui.unmount()
+})
+
+test('https Atvērt ir saite, ko atver aplikācija; ~/ ceļu sasien ar mājas mapi', async ($, on) => {
+  const d = dzinejs(on, { faili: { '/Users/es/klienti/brifs.md': '' } })
+  const veca = ANALIZES['Sesija a']
+  ANALIZES['Sesija a'] = {
+    tev: [
+      { darbs: 'Nosūti melnrakstu', atvert: 'https://mail.google.com/mail/#drafts' },
+      { darbs: 'Pārskati brīfu', atvert: '~/klienti/brifs.md' },
+    ],
+    claude: [],
+    pabeigts: false,
+  }
+  try {
+    const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+    await ui.press({ key: 'atjaunot' } as any)
+    // Saite ir Link (to atver aplikācija), nevis poga, kas palaiž `open` no moda procesa.
+    const saites = (await ui.findAll({ type: 'Link' } as any)) as unknown as { props: { href: string; label: string } }[]
+    expect(saites.map(x => x.props)).toContainEqual({ href: 'https://mail.google.com/mail/#drafts', label: 'Atvērt' })
+    await ui.press({ key: 'atvert-darbu:a:1' } as any)
+    expect(d.suti.at(-1)).toMatchObject({ server: 'ccd_view', riks: 'show_pane', path: '/Users/es/klienti/brifs.md' })
+    await ui.unmount()
+  } finally {
+    ANALIZES['Sesija a'] = veca
+  }
+})
+
+test('analīze atzīmē darbus, kas pēc sarunas jau izdarīti, bez piezīmes sesijai', async ($, on) => {
+  const d = dzinejs(on)
+  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+  await ui.press({ key: 'atjaunot' } as any)
+  const veca = ANALIZES['Sesija a']
+  const sesijaA = DATI.sesijas[0] as { last: number }
+  ANALIZES['Sesija a'] = { tev: [], claude: [], izdariti: [2], pabeigts: false }
+  sesijaA.last = 10
+  try {
+    await ui.press({ key: 'atjaunot' } as any)
+    expect(d.jautajumi.at(-1)).toContain('2. Ievadi paroli')
+    const iz = d.krātuve.get('izdariti') as Record<string, number>
+    expect(iz['a|t|Ievadi paroli']).toBeDefined()
+    expect(iz['a|t|Izlem par domēniem']).toBeUndefined()
+    expect((d.krātuve.get('izdaritiVesture') as Record<string, string[]>).a).toEqual(['Ievadi paroli'])
+    expect((d.krātuve.get('pazinojumi') as Record<string, string[]> | undefined)?.a).toBeUndefined()
+    // Paliek kartītē atzīmēts (var atķeksēt atpakaļ), tāpēc Atvērt pie tā vairs nav.
+    expect(await atrodi(ui, 'keksis:a:1')).toBeDefined()
+  } finally {
+    ANALIZES['Sesija a'] = veca
+    sesijaA.last = 5
+  }
+  await ui.unmount()
+})
+
+test('pēc gājiena šī sesija pati atzīmē izdarītos; bez atvērtiem darbiem modeli nejautā', async ($, on) => {
+  const d = dzinejs(on)
+  const sesijaA = DATI.sesijas[0] as { sis: boolean }
+  sesijaA.sis = true
+  const veca = ANALIZES['Sesija a']
+  ANALIZES['Sesija a'] = { izdariti: [1] }
+  d.krātuve.set('analizes3', {
+    a: {
+      last: 5, sakts: 1, isGatava: true, isPabeigts: false, claude: [],
+      tev: [{ darbs: 'Nosūti e-pastu', sikak: '', atvert: '' }, { darbs: 'Izlem par domēniem', sikak: '', atvert: '' }],
+    },
+  })
+  try {
+    await ($ as any).turn.complete(GAJIENS)
+    await pagaidi(() => d.krātuve.get('izdariti') !== undefined)
+    await pagaidi()
+    const iz = d.krātuve.get('izdariti') as Record<string, number>
+    expect(iz['a|t|Nosūti e-pastu']).toBeDefined()
+    expect(iz['a|t|Izlem par domēniem']).toBeUndefined()
+    expect(d.jautajumi.some(q => q.includes('1. Nosūti e-pastu'))).toBe(true)
+    // Abi izdarīti: nākamais gājiens modeli vairs nejautā.
+    d.krātuve.set('izdariti', { ...iz, 'a|t|Izlem par domēniem': 1 })
+    const skaits = d.jautajumi.length
+    await ($ as any).turn.complete(GAJIENS)
+    await pagaidi()
+    expect(d.jautajumi.length).toBe(skaits)
+  } finally {
+    sesijaA.sis = false
+    ANALIZES['Sesija a'] = veca
+  }
+})
+
+test('ar izslēgtu iestatījumu pēc gājiena neko neatzīmē', { options: { atzimetAutomatiski: false } } as any, async ($: any, on: any) => {
+  const d = dzinejs(on)
+  const sesijaA = DATI.sesijas[0] as { sis: boolean }
+  sesijaA.sis = true
+  d.krātuve.set('analizes3', {
+    a: { last: 5, sakts: 1, isGatava: true, isPabeigts: false, claude: [], tev: [{ darbs: 'Nosūti e-pastu', sikak: '', atvert: '' }] },
+  })
+  try {
+    await $.turn.complete(GAJIENS)
+    await pagaidi()
+    expect(d.krātuve.get('izdariti')).toBeUndefined()
+  } finally {
+    sesijaA.sis = false
+  }
 })

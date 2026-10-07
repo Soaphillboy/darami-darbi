@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Sesijas konteksts nākamā darba analīzei: claude-mem kopsavilkums un pēdējās sarunas ziņas.
+"""Sesijas konteksts nākamā darba analīzei: claude-mem kopsavilkums, pēdējās sarunas ziņas un faili / saites,
+ko sesija rakstīja vai minēja (no tiem modelis ņem pogu "Atvērt").
 
 Izsauc mods valejie-darbi: python3 konteksts.py <cliSessionId>. Izdod tekstu uz stdout.
 """
@@ -17,6 +18,12 @@ ZINAS = 14
 ZINAS_GARUMS = 900
 KOPA = 10_000
 REMINDER = re.compile(r'<system-reminder>.*?</system-reminder>', re.S)
+SAITE = re.compile(r'https://[^\s)\]>"\'`]+')
+FAILU_RIKI = ('Write', 'Edit', 'MultiEdit', 'NotebookEdit')
+# Atmiņa, pagaidu faili un iestatījumi nav darbs, ko lietotājam atvērt.
+NE_FAILI = ('/.claude/', '/private/tmp/', '/tmp/', '/node_modules/')
+MAX_FAILI = 10
+MAX_SAITES = 8
 
 
 def claude_mem():
@@ -50,7 +57,7 @@ def teksts_no(content):
     return '\n'.join(dalas)
 
 
-def pedejas_zinas():
+def rindas_no_transkripta():
     faili = glob.glob(os.path.expanduser(f'~/.claude/projects/*/{CLI}.jsonl'))
     if not faili:
         return []
@@ -58,12 +65,18 @@ def pedejas_zinas():
         fh.seek(0, os.SEEK_END)
         fh.seek(max(0, fh.tell() - ASTE_BAITI))
         rindas = fh.read().decode('utf-8', 'replace').splitlines()[1:]
-    zinas = []
+    out = []
     for rinda in rindas:
         try:
-            ier = json.loads(rinda)
+            out.append(json.loads(rinda))
         except Exception:
             continue
+    return out
+
+
+def pedejas_zinas(ieraksti):
+    zinas = []
+    for ier in ieraksti:
         if ier.get('type') not in ('user', 'assistant') or ier.get('isMeta'):
             continue
         t = REMINDER.sub('', teksts_no((ier.get('message') or {}).get('content'))).strip()
@@ -77,11 +90,48 @@ def pedejas_zinas():
     return zinas[-ZINAS:]
 
 
+def pievienot(saraksts, x):
+    if x in saraksts:
+        saraksts.remove(x)
+    saraksts.append(x)
+
+
+def faili_un_saites(ieraksti):
+    """Faili, ko sesija rakstīja vai laboja (tikai esošie), un https saites no sarunas teksta; jaunākie beigās."""
+    faili, saites = [], []
+    for ier in ieraksti:
+        if ier.get('type') not in ('user', 'assistant') or ier.get('isMeta'):
+            continue
+        content = (ier.get('message') or {}).get('content')
+        if isinstance(content, str):
+            content = [{'type': 'text', 'text': content}]
+        for b in content or []:
+            if not isinstance(b, dict):
+                continue
+            if b.get('type') == 'tool_use' and b.get('name') in FAILU_RIKI:
+                cels = (b.get('input') or {}).get('file_path') or (b.get('input') or {}).get('notebook_path') or ''
+                if cels.startswith('/') and not any(x in cels for x in NE_FAILI):
+                    pievienot(faili, cels)
+            elif b.get('type') == 'text':
+                teksts = REMINDER.sub('', b.get('text', ''))
+                if teksts.startswith('<cross-session-message'):
+                    continue
+                for saite in SAITE.findall(teksts):
+                    pievienot(saites, saite.rstrip('.,;:!?'))
+    faili = [f for f in faili if os.path.isfile(f)][-MAX_FAILI:]
+    return faili, saites[-MAX_SAITES:]
+
+
 dalas = []
 mem = claude_mem()
 if mem:
     dalas.append('## claude-mem summary\n' + mem)
-zinas = pedejas_zinas()
+ieraksti = rindas_no_transkripta()
+zinas = pedejas_zinas(ieraksti)
 if zinas:
     dalas.append('## Latest messages\n' + '\n\n'.join(zinas))
-print('\n\n'.join(dalas)[-KOPA:])
+faili, saites = faili_un_saites(ieraksti)
+beigas = ''
+if faili or saites:
+    beigas = '\n\n## Faili un saites (Files and links)\n' + '\n'.join(f'- {x}' for x in faili + saites)
+print('\n\n'.join(dalas)[-(KOPA - len(beigas)):] + beigas)

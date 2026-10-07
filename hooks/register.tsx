@@ -43,7 +43,7 @@ const STORE_REDZETI = 'redzeti'
 const STORE_REPO_SESIJAS = 'repoSesijas'
 // /darbi padomi: vai rādīt padomus (pārspēj iestatījumu "radiPadomus").
 const STORE_PADOMI = 'padomi'
-// ✓ paslēpj sesiju; tā atgriežas tikai tad, ja tajā kaut kas notiek vēlāk par šo laiku pēc atzīmes.
+// ✕ paslēpj sesiju; tā atgriežas tikai tad, ja tajā kaut kas notiek vēlāk par šo laiku pēc atzīmes.
 const GATAVS_PECAK_MS = 10 * 60 * 1000
 // Cik sesijas analizēt automātiski vienā atjaunošanā; cik ilgi citas sesijas neaiztiek analīzi, ko kāda jau veido;
 // cik ilgi sesijai jābūt klusai, pirms to analizē no jauna (lai aktīvu sesiju nepārbauda ik 30 s).
@@ -80,7 +80,7 @@ const radiPabeigtas = atom({ plugin: 'valejie-darbi', key: 'radiPabeigtas' } as 
 const zinja = atom({ plugin: 'valejie-darbi', key: 'zinja' } as const, '')
 
 // Kartītes galvenes pogas: viena zīme katrai.
-const IKONA = { gatavs: '✓', atgriezt: '↑', arhivet: '🗄', pievienot: '+', sutit: '➤' }
+const IKONA = { gatavs: '✕', atgriezt: '↑', arhivet: '🗄', pievienot: '+', sutit: '➤' }
 // "Tev" / "Claude" kolonnas platums rūtiņās, lai visi ķeksīši stāv vienā līnijā.
 const ETIKETES_PLATUMS = 7
 
@@ -107,10 +107,14 @@ function grupa(s: Sesija, a: Atzimes, an: Analizes, iz: Izdariti, at: Atskaites)
   const r = an[s.id]?.isGatava ? an[s.id] : undefined
   const atvertiTev = r ? r.tev.filter(d => iz[tevAtslega(s, d)] === undefined).length : 0
   const atvertiClaude = r ? r.claude.filter(d => iz[claudeAtslega(s, d)] === undefined).length : 0
-  // Atsūtīta atskaite gaida, lai to izlasi: kartīte paliek redzama, līdz to aizver (✕ vai ✓).
+  // Atsūtīta atskaite gaida, lai to izlasi: kartīte paliek redzama, līdz to aizver (✕).
   if (at[s.id]) return atvertiTev === 0 && atvertiClaude > 0 ? 'turpinat' : 'gaida'
-  // ↑ no pabeigtajām: kartīte atpakaļ sarakstā, līdz ✓.
-  if (atz?.veids === 'turpinat') return atvertiTev > 0 ? 'gaida' : 'turpinat'
+  // ↑ no pabeigtajām: kartīte atpakaļ sarakstā, līdz ✕ vai līdz analīze pēc ↑ neatrod neko darāmu.
+  if (atz?.veids === 'turpinat') {
+    if (atvertiTev > 0) return 'gaida'
+    if (atvertiClaude > 0 || !r || r.sakts < (atz.kad ?? atz.last)) return 'turpinat'
+    return 'pabeigtas'
+  }
   // Kartīte paliek savā grupā, kamēr kāds darbs vēl nav izdarīts (atsevišķs ķeksis to nepārbīda);
   // kad visi ☐ atzīmēti un visi ▷ palaisti, tā pati pāriet uz pabeigtajām.
   if (r) {
@@ -202,7 +206,7 @@ function repoTeksts(r: Repo): string {
 }
 
 /** Modeļa JSON atbilde → tīri, īsi darbi; nesaprotama atbilde = null. */
-function parsetAnalizi(text: string): Pick<Analize, 'tev' | 'claude' | 'isPabeigts'> | null {
+function parsetAnalizi(text: string): (Pick<Analize, 'tev' | 'claude' | 'isPabeigts'> & { izdariti: number[] }) | null {
   const sakums = text.indexOf('{')
   const beigas = text.lastIndexOf('}')
   if (sakums < 0 || beigas <= sakums) return null
@@ -210,6 +214,7 @@ function parsetAnalizi(text: string): Pick<Analize, 'tev' | 'claude' | 'isPabeig
     const j = JSON.parse(text.slice(sakums, beigas + 1)) as {
       tev?: { darbs?: unknown; sikak?: unknown; atvert?: unknown }[]
       claude?: { darbs?: unknown; prompts?: unknown }[]
+      izdariti?: unknown
       pabeigts?: unknown
     }
     const tev = (Array.isArray(j.tev) ? j.tev : [])
@@ -224,17 +229,58 @@ function parsetAnalizi(text: string): Pick<Analize, 'tev' | 'claude' | 'isPabeig
       .filter(d => typeof d?.darbs === 'string' && typeof d?.prompts === 'string' && d.prompts.trim() !== '')
       .slice(0, 1)
       .map(d => ({ darbs: isis(String(d.darbs), 100), prompts: String(d.prompts).trim().slice(0, 400) }))
-    return { tev, claude, isPabeigts: j.pabeigts === true }
+    return { tev, claude, izdariti: numuri(j.izdariti), isPabeigts: j.pabeigts === true }
   } catch {
     return null
   }
 }
 
-/** Atstāj tikai https saites un failus, kas tiešām eksistē (relatīvos ceļus sasien ar sesijas mapi). */
+/** Darbu numuri (no 1) no modeļa atbildes; viss pārējais tiek ignorēts. */
+function numuri(x: unknown): number[] {
+  return (Array.isArray(x) ? x : []).map(Number).filter(n => Number.isInteger(n) && n > 0)
+}
+
+/** Pēcgājiena pārbaudes atbilde {"izdariti":[…]} → numuri; nesaprotama = tukšs. */
+function parsetIzdaritos(text: string): number[] {
+  const sakums = text.indexOf('{')
+  const beigas = text.lastIndexOf('}')
+  if (sakums < 0 || beigas <= sakums) return []
+  try {
+    return numuri((JSON.parse(text.slice(sakums, beigas + 1)) as { izdariti?: unknown }).izdariti)
+  } catch {
+    return []
+  }
+}
+
+let majasMape: string | undefined
+
+/** Lietotāja mājas mape (`~/…` ceļiem); vienreiz no vides. */
+async function majas($: EngineInterface): Promise<string> {
+  if (majasMape === undefined) {
+    const r = await $.process.run(['/usr/bin/printenv', 'HOME']).catch(() => undefined)
+    majasMape = r?.exitCode === 0 ? r.stdout.trim() : ''
+  }
+  return majasMape
+}
+
+/**
+ * Atstāj tikai https saites un failus, kas tiešām eksistē: `~/…` sasien ar mājas mapi, relatīvos ar sesijas mapi,
+ * `file://` noņem.
+ */
 async function parbauditAtvert($: EngineInterface, s: Sesija, atvert: string): Promise<string> {
   if (atvert === '') return ''
   if (/^https:\/\//.test(atvert)) return atvert
-  const cels = atvert.startsWith('/') ? atvert : s.cwd ? `${s.cwd}/${atvert.replace(/^\.\//, '')}` : ''
+  let merkis = atvert.replace(/^file:\/\//, '')
+  try {
+    merkis = decodeURI(merkis)
+  } catch {
+    // neko: ceļš paliek, kā bija
+  }
+  if (merkis.startsWith('~/')) {
+    const m = await majas($)
+    merkis = m ? `${m}/${merkis.slice(2)}` : ''
+  }
+  const cels = merkis.startsWith('/') ? merkis : merkis && s.cwd ? `${s.cwd}/${merkis.replace(/^\.\//, '')}` : ''
   if (cels === '') return ''
   try {
     return (await $.fs.exists(cels)) ? cels : ''
@@ -363,7 +409,7 @@ async function analizet($: EngineInterface, s: Sesija, isPiespiedu: boolean): Pr
       t.promptsMape(s.cwd),
       t.promptsStatuss(s.status, s.detail),
       s.needs ? t.promptsGaida(s.needs) : '',
-      atvertie.length > 0 ? `${t.promptsTevEsosie}\n${atvertie.map(d => `- ${d.darbs}`).join('\n')}` : '',
+      atvertie.length > 0 ? `${t.promptsTevEsosie}\n${atvertie.map((d, i) => `${i + 1}. ${d.darbs}`).join('\n')}` : '',
       atvertieClaude.length > 0 ? `${t.promptsClaudeEsosie}\n${atvertieClaude.map(d => `- ${d.darbs}`).join('\n')}` : '',
       vesture.length > 0 ? `${t.promptsVesture}\n${vesture.map(d => `- ${d}`).join('\n')}` : '',
       '',
@@ -373,6 +419,12 @@ async function analizet($: EngineInterface, s: Sesija, isPiespiedu: boolean): Pr
     const parsets = r.isAnswered ? parsetAnalizi(r.text) : null
     const visas = (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {}
     if (parsets) {
+      // Darbi, kas pēc sarunas jau izdarīti: atzīmē kā ☐ (paliek kartītē atzīmēti, analīze tos vairs nepiedāvā).
+      await atzimetAutomatiski(
+        $,
+        s,
+        parsets.izdariti.map(n => atvertie[n - 1]).filter((d): d is TevDarbs => d !== undefined),
+      )
       const jauni = parsets.tev.filter(
         n => !vecie.some(v => lidzigs(v.darbs, n.darbs)) && !vesture.some(v => lidzigs(v, n.darbs)),
       )
@@ -408,6 +460,67 @@ async function analizet($: EngineInterface, s: Sesija, isPiespiedu: boolean): Pr
     await update($, analizes, () => visas)
   } finally {
     await update($, parbauda, ids => ids.filter(id => id !== s.id))
+  }
+}
+
+/**
+ * Darbi, kas pēc sarunas konteksta jau izdarīti: atzīmē kā ☐ un ieraksta izdarīto atmiņā, bet bez klusās piezīmes
+ * sesijai (tā to jau zina). Lietotājs var atķeksēt atpakaļ, ja modelis kļūdījās.
+ */
+async function atzimetAutomatiski($: EngineInterface, s: Sesija, darbi: TevDarbs[]): Promise<void> {
+  if (darbi.length === 0) return
+  const now = await $.clock.now()
+  const iz = (await lasitStore<Izdariti>($, STORE_IZDARITI)) ?? {}
+  const jauni = darbi.filter(d => iz[tevAtslega(s, d)] === undefined)
+  if (jauni.length === 0) return
+  const nakamie = { ...iz, ...Object.fromEntries(jauni.map(d => [tevAtslega(s, d), now])) }
+  await $.store.set(STORE_IZDARITI, nakamie)
+  await update($, izdariti, () => nakamie)
+  const vesture = (await lasitStore<Record<string, string[]>>($, STORE_VESTURE)) ?? {}
+  const bija = (vesture[s.id] ?? []).filter(x => !jauni.some(d => d.darbs === x))
+  await $.store.set(STORE_VESTURE, { ...vesture, [s.id]: [...bija, ...jauni.map(d => d.darbs)].slice(-30) })
+  await update($, zinja, () => isis(t.autoIzdariti(jauni.map(d => d.darbs)), 240))
+}
+
+let isParbaudaIzdaritos = false
+
+/**
+ * Pēc katra gājiena šajā sesijā: vai kāds no tās atvērtajiem ☐ darbiem pēc sarunas jau ir izdarīts. Tikai atzīmē,
+ * jaunus darbus nepiedāvā (to dara parastā analīze, kad sesija apklust). Nav atvērtu darbu = nav modeļa izsaukuma.
+ */
+async function parbauditIzdaritos($: EngineInterface): Promise<void> {
+  if (isParbaudaIzdaritos) return
+  const s = (await read($, dati)).sesijas.find(x => x.sis)
+  if (!s?.cli) return
+  const r = ((await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {})[s.id]
+  if (!r?.isGatava) return
+  const iz = (await lasitStore<Izdariti>($, STORE_IZDARITI)) ?? {}
+  const atvertie = r.tev.filter(d => iz[tevAtslega(s, d)] === undefined)
+  if (atvertie.length === 0) return
+  isParbaudaIzdaritos = true
+  try {
+    const ctx = await $.process.run(['python3', `${$.plugin.root}/hooks/konteksts.py`, s.cli])
+    const prompt = [
+      t.promptsSesija(s.title),
+      t.promptsIzdaritiDarbi,
+      ...atvertie.map((d, i) => `${i + 1}. ${d.darbs}${d.sikak ? ` (${d.sikak})` : ''}`),
+      '',
+      ctx.stdout,
+    ].join('\n')
+    const atb = await $.model.complete({
+      model: 'sonnet',
+      system: t.sistemaIzdariti(vards),
+      prompt,
+      maxTokens: 100,
+      timeoutMs: 60_000,
+    })
+    if (!atb.isAnswered) return
+    const darbi = parsetIzdaritos(atb.text)
+      .map(n => atvertie[n - 1])
+      .filter((d): d is TevDarbs => d !== undefined)
+    await atzimetAutomatiski($, s, darbi)
+  } finally {
+    isParbaudaIzdaritos = false
   }
 }
 
@@ -730,13 +843,17 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
-    void atjaunot($)
+    // Fonā, lai gājiena beigas negaida: vispirms svaigi dati, tad vai šīs sesijas darbi jau izdarīti.
+    void (async () => {
+      await atjaunot($)
+      if (options.atzimetAutomatiski !== false) await parbauditIzdaritos($)
+    })()
     return result
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const el = $.ui.resolve(e)
-    const { Box, Text, Button } = el
+    const { Box, Text, Button, Link } = el
     const d = await read($, dati)
     const a = await read($, atzimes)
     const an = await read($, analizes)
@@ -789,8 +906,16 @@ export const register: Register = (on, options) => {
         return
       }
       const panelis = await ccdRiks($, 'ccd_view', 'show_pane', { pane: 'file', path: merkis })
-      if (panelis.isOk && !/nothing|not open|isn't open|outside|not inside/i.test(panelis.teksts)) return
+      const isPanelis = panelis.isOk && !/nothing|not open|isn't open|outside|not inside|own window/i.test(panelis.teksts)
+      // Pēdējais "Atvērt" diskā, lai var nolasīt, ja poga atkal "neko nedara".
+      const zurnals = (x: unknown) =>
+        $.fs.write(`${$.plugin.root}/.pedeja-atvert.json`, JSON.stringify({ merkis, panelis, ...(x as object) }, null, 2))
+      if (isPanelis) {
+        await zurnals({ ka: 'failu panelis' })
+        return
+      }
       const r = await $.process.run(['open', '-a', 'Visual Studio Code', merkis])
+      await zurnals({ ka: 'VS Code', exitCode: r.exitCode, stderr: r.stderr })
       if (r.exitCode !== 0) await pazinot(t.neizdevasAtvertFailu(r.stderr))
     }
     const arhivet = (s: Sesija) => async () => {
@@ -852,7 +977,7 @@ export const register: Register = (on, options) => {
     }
     // ↑ pabeigtajās: kartīte atpakaļ sarakstā ar visiem neizdarītajiem darbiem; pārbauda, vai nav jaunu.
     const atgriezt = (s: Sesija) => async () => {
-      await atzimet($, s, { veids: 'turpinat', last: s.last })
+      await atzimet($, s, { veids: 'turpinat', last: s.last, kad: await $.clock.now() })
       await analizet($, s, true)
     }
 
@@ -928,9 +1053,9 @@ export const register: Register = (on, options) => {
       })
       const arhivs = s.sis ? [] : [p('arhivet', IKONA.arhivet, t.padoms.arhivet, arhivet(s))]
       const atpakal = p('atgriezt', IKONA.atgriezt, t.padoms.atgriezt, atgriezt(s))
-      if (gr === 'bez') return [atpakal, p('gatavs', IKONA.gatavs, t.padoms.gatavs, gatavs(s)), ...arhivs]
+      if (gr === 'bez') return [atpakal, p('gatavs', IKONA.gatavs, t.padoms.paslept, gatavs(s)), ...arhivs]
       if (gr === 'pabeigtas') return [atpakal, ...arhivs]
-      return [p('gatavs', IKONA.gatavs, t.padoms.gatavs, gatavs(s))]
+      return [p('gatavs', IKONA.gatavs, t.padoms.paslept, gatavs(s))]
     }
 
     type DarbaRinda = {
@@ -1027,7 +1152,12 @@ export const register: Register = (on, options) => {
             arPadomu(
               `atvert-darbu:${d.s.id}:${d.i}`,
               t.padoms.atvert,
-              <Button key={`atvert-darbu:${d.s.id}:${d.i}`} label={t.atvertPoga} dimColor onPress={atvertSaiti(d.atvert)} />,
+              // https saiti atver pati aplikācija (pārlūkā); `open` no moda procesa to klusi nedarīja.
+              /^https:\/\//.test(d.atvert) ? (
+                <Link key={`atvert-darbu:${d.s.id}:${d.i}`} href={d.atvert} label={t.atvertPoga} />
+              ) : (
+                <Button key={`atvert-darbu:${d.s.id}:${d.i}`} label={t.atvertPoga} dimColor onPress={atvertSaiti(d.atvert)} />
+              ),
             )}
         </Box>
       )

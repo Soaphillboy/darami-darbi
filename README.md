@@ -64,7 +64,7 @@ Pārbaudīts tikai uz macOS: panelis lasa aplikācijas sesiju failus `~/Library/
 | ▷ | Palaiž Claude darbu tajā sesijā |
 | ✕ pie Claude darba | Atmet darbu, analīze to vairs nepiedāvā |
 | + | Jauns darbs. Enter vai ✓ saglabā, ➤ uzreiz nosūta Claude. `c:` priekšā = Claude darbs |
-| ✓ | Gatavs, kartīte pāriet uz pabeigtajām |
+| ✕ kartītes galvenē | Paslēpj kartīti, tā pāriet uz pabeigtajām. Atgriežas pati, ja sesijā kaut kas notiek |
 | ↑ pabeigtajās | Atgriež kartīti sarakstā |
 | 🗄 | Arhivē sesiju |
 | Atvērt | Atver failu blakus sarunai vai saiti pārlūkā |
@@ -106,11 +106,14 @@ Kartītes sakārtotas kā sānjoslā: pēdējā aktīvā sesija augšā, ar datu
 | `atvertAutomatiski` | Panelis atveras katrā jaunā sesijā |
 | `radiPadomus` | Paskaidrojumi pie pogām |
 | `zinotParAtskaitem` | macOS paziņojums ar skaņu, kad pienāk atskaite |
+| `atzimetAutomatiski` | Pēc katra gājiena sesija atzīmē savus ☐ darbus, kas pēc sarunas jau izdarīti |
 
 ### Kā tas strādā
 
 - **Dati** nāk no aplikācijas sesiju failiem (statuss, "gaida tevi"), claude-mem datubāzes un sarunas pēdējās daļas. Atjaunojas ik 30 sekundes.
 - **Analīze** iet caur tavu paša Claude sesiju ar Sonnet: ne vairāk kā 3 sesijas reizē, un no jauna tikai tad, ja sesijā kaut kas mainījies un tā 2 minūtes ir klusa. Tas tērē tokenus no tava Claude plāna.
+- **Izdarītie automātiski:** pēc katra gājiena sesija ar īsu Sonnet jautājumu pārbauda savus atvērtos ☐ darbus un atzīmē tos, kas pēc sarunas jau izdarīti ("nosūtīju", darbs pabeigts, vairs nav aktuāls). Tos pašus atzīmē arī parastā analīze. Nav atvērtu darbu, nav jautājuma. Ja modelis kļūdījās, atķeksē atpakaļ.
+- **Atvērt:** analīze redz sesijā rakstītos failus un sarunā minētās saites. https saiti atver pati aplikācija pārlūkā, failu atver failu panelī blakus sarunai (ja nevar, VS Code).
 - **Stāvoklis** (atzīmes, secība, atskaites) glabājas Claude Code spraudņa krātuvē un ir kopīgs visām sesijām.
 - **Privātums:** viss notiek tavā datorā. Sarunu fragmenti aiziet tikai uz modeli caur tavu Claude kontu, tāpat kā parastā sesijā.
 
@@ -194,6 +197,8 @@ Set `"valoda": "en"` in `pluginConfigs.valejie-darbi.options` (see the Latvian s
 
 - **Data** comes from the app's session files (status, "waiting for you"), the claude-mem database and the tail of each conversation, refreshed every 30 seconds.
 - **Analysis** runs through your own Claude session with Sonnet: at most 3 sessions at a time, and again only after a session changed and has been quiet for 2 minutes. It uses tokens from your Claude plan.
+- **Done by itself:** after every turn a session asks Sonnet briefly which of its open ☐ tasks the conversation shows are done ("sent it", finished, no longer applies) and ticks them. The regular analysis does the same. No open tasks, no question. If the model got it wrong, untick it. Turn off with `atzimetAutomatiski: false`.
+- **Open:** the analysis sees files the session wrote and links mentioned in the conversation. The app itself opens https links in your browser; files open in the file pane beside the conversation (or VS Code).
 - **State** (ticks, order, reports) lives in the Claude Code plugin store and is shared by all sessions.
 - **Privacy:** everything runs on your machine. Conversation excerpts only go to the model through your own Claude account, as in any session.
 
