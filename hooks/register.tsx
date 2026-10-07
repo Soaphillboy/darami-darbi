@@ -906,19 +906,23 @@ export const register: Register = (on, options) => {
             />,
             'kreisi',
           )}
-          {/* ➤ parādās tikai, kad pele ir virs rindas (terminālī peles virzīšanas nav, tur vienmēr). */}
-          {d.onNodot && !d.isAtzimets && (
-            <Box
-              {...(e.surface === 'terminal' ? {} : { display: 'none' as const, hover: { display: 'flex' as const } })}
-            >
-              {arPadomu(
-                `nodot:${d.s.id}:${d.i}`,
-                t.padoms.nodotClaude,
-                <Button key={`nodot:${d.s.id}:${d.i}`} plain dimColor label={IKONA.sutit} onPress={d.onNodot} />,
-                'kreisi',
-              )}
-            </Box>
-          )}
+          {/* ➤ vienmēr blāvs un iedegas, kad pele ir virs rindas. Paslēpts (display: none) ar parādīšanu uz hover
+              to aplikācijā nevar nospiest: spiediens uz sākotnēji paslēptu pogu modam netiek nodots. */}
+          {d.onNodot &&
+            !d.isAtzimets &&
+            arPadomu(
+              `nodot:${d.s.id}:${d.i}`,
+              t.padoms.nodotClaude,
+              <Button
+                key={`nodot:${d.s.id}:${d.i}`}
+                plain
+                dimColor
+                hover={{ dimColor: false, color: KRASA.turpinat }}
+                label={IKONA.sutit}
+                onPress={d.onNodot}
+              />,
+              'kreisi',
+            )}
           {d.onAtmest &&
             !d.isAtzimets &&
             arPadomu(
