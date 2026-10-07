@@ -747,3 +747,20 @@ test('no analīzes ne vairāk kā 1 Claude darbs; kamēr gaida ▷ atskaiti, jau
     sesijaT.last = 5
   }
 })
+
+test('sesija, kurā esi, ir augšā sadaļā "Šī sesija"; atjaunot ir ikona ↻', async ($, on) => {
+  dzinejs(on)
+  const sesijaB = DATI.sesijas[2] as { sis: boolean }
+  sesijaB.sis = true
+  try {
+    const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+    await ui.press({ key: 'atjaunot' } as any)
+    expect(await teksts(ui, /^Šī sesija$/)).toBeDefined()
+    // Pabeigta sesija citādi būtu saliekamajā sadaļā; kā pašreizējā tā redzama augšā ar savu karti.
+    expect(await atrodi(ui, 'atvert:b')).toBeDefined()
+    expect((await atrodi(ui, 'atjaunot'))?.label ?? '↻').toBe('↻')
+    await ui.unmount()
+  } finally {
+    sesijaB.sis = false
+  }
+})

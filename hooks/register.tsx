@@ -687,7 +687,18 @@ export const register: Register = (on, options) => {
     const paz = await read($, pazinots)
     const repoIzvele = await read($, repoSesijas)
     const isPadomi = await read($, radiPadomus)
-    const g = grupet(d.sesijas, a, an, iz, at, paz, sec)
+    // Sesija, kurā esi, ir pati augšā savā sadaļā (ar visiem darbiem), lai pēc pārslēgšanās tās darāmais ir uzreiz redzams.
+    const sisSesija = d.sesijas.find(s => s.sis)
+    const g = grupet(
+      d.sesijas.filter(s => !s.sis),
+      a,
+      an,
+      iz,
+      at,
+      paz,
+      sec,
+    )
+    const sisGrupa = sisSesija ? grupa(sisSesija, a, an, iz, at, paz) : undefined
 
     const pazinot = async (teksts: string) => {
       await update($, zinja, () => isis(teksts, 240))
@@ -1334,10 +1345,16 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column" gap={1}>
-        <Box flexDirection="row" justifyContent="space-between">
+        <Box flexDirection="row" gap={1} alignItems="center">
           <Text dimColor>{d.laiks ? `${t.atjaunots} ${laiks(d.laiks)}` : t.ielade}</Text>
-          <Button key="atjaunot" label={t.atjaunot} onPress={() => atjaunot($)} />
+          {arPadomu('atjaunot', t.atjaunot, <Button key="atjaunot" plain dimColor label="↻" onPress={() => atjaunot($)} />, 'kreisi')}
         </Box>
+        {sisSesija && sisGrupa && (
+          <Box flexDirection="column">
+            {virsraksts(punktaVeids(sisGrupa, sisSesija), t.padoms.sisSesija, 1)}
+            {kartite(sisGrupa, sisSesija, true)}
+          </Box>
+        )}
         {d.kluda !== '' && <Text color="red">{d.kluda}</Text>}
         {msg !== '' && <Text color={KRASA.gaida}>{msg}</Text>}
 
