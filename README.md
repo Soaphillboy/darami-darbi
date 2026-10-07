@@ -13,7 +13,7 @@ A side panel for the Claude Code desktop app that shows the open work of all you
 Tev ir 10 atvērtas sesijas, un katrā kaut kas palika pusē. Panelis tās savāc vienā sarakstā:
 
 ```
-● creators.lv mājaslapa  +                              ↑  ↓  ✓
+● creators.lv mājaslapa  +                                    ✓
   Tev     ☐ Izlem, kuru domēnu pirkt                  Atvērt
           ☐ Pārskati jauno sākumlapas tekstu
   Claude  ▷ ✕  Izdzēs testa lapas
@@ -64,14 +64,13 @@ Pārbaudīts tikai uz macOS: panelis lasa aplikācijas sesiju failus `~/Library/
 | ▷ | Palaiž Claude darbu tajā sesijā |
 | ✕ pie Claude darba | Atmet darbu, analīze to vairs nepiedāvā |
 | + | Jauns darbs. Enter vai ✓ saglabā, ➤ uzreiz nosūta Claude. `c:` priekšā = Claude darbs |
-| ↑ ↓ | Maina secību |
 | ✓ | Gatavs, kartīte pāriet uz pabeigtajām |
 | ↑ pabeigtajās | Atgriež kartīti sarakstā |
 | 🗄 | Arhivē sesiju |
 | Atvērt | Atver failu blakus sarunai vai saiti pārlūkā |
 | pušo | Nosūta "pušo &lt;repo&gt;" atbildīgajai sesijai. Sesiju var nomainīt izvēlnē → |
 
-Krāsainais punkts pulsē, kad kartītē ir kaut kas jauns.
+Kartītes sakārtotas kā sānjoslā: pēdējā aktīvā sesija augšā, ar datumiem (Šodien, Vakar, Pēdējās 7 dienas, Agrāk). Sesija, kurā esi, vienmēr ir pati augšā. Krāsainais punkts pulsē, kad kartītē ir kaut kas jauns: jauns darbs, atskaite vai sesija sāk gaidīt tevi.
 
 ### Komandas
 

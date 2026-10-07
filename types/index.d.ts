@@ -85,7 +85,6 @@ declare module 'claude-code' {
       radiPadomus: boolean
       parbauda: string[]
       izversti: string[]
-      seciba: string[]
       radiPabeigtas: boolean
       zinja: string
     }

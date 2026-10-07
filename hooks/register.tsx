@@ -26,7 +26,6 @@ const ATJAUNOT_MS = 30 * 1000
 const STORE_ATZIMES = 'atzimes'
 const STORE_ANALIZES = 'analizes3'
 const STORE_IZDARITI = 'izdariti'
-const STORE_SECIBA = 'seciba'
 const STORE_ATSKAITES = 'atskaites'
 // Sesijas, kurām nosūtīts ▷ un no kurām gaidām atskaiti: { sesijasId: kad nosūtīts }.
 const STORE_GAIDA_ATSKAITI = 'gaidaAtskaiti'
@@ -77,13 +76,11 @@ const ievadesTeksts = atom({ plugin: 'valejie-darbi', key: 'ievadesTeksts' } as 
 const parbauda = atom({ plugin: 'valejie-darbi', key: 'parbauda' } as const, [] as string[])
 // Izvērsto darbu atslēgas (pilnais teksts vairākās rindās); tikai šai sesijai, netiek glabāts.
 const izversti = atom({ plugin: 'valejie-darbi', key: 'izversti' } as const, [] as string[])
-// lietotāja noteiktā kartīšu secība (↑ ↓), sesiju ID; kopīga visām sesijām caur krātuvi.
-const seciba = atom({ plugin: 'valejie-darbi', key: 'seciba' } as const, [] as string[])
 const radiPabeigtas = atom({ plugin: 'valejie-darbi', key: 'radiPabeigtas' } as const, false)
 const zinja = atom({ plugin: 'valejie-darbi', key: 'zinja' } as const, '')
 
 // Kartītes galvenes pogas: viena zīme katrai.
-const IKONA = { augsa: '↑', leja: '↓', gatavs: '✓', atgriezt: '↑', arhivet: '🗄', pievienot: '+', sutit: '➤' }
+const IKONA = { gatavs: '✓', atgriezt: '↑', arhivet: '🗄', pievienot: '+', sutit: '➤' }
 // "Tev" / "Claude" kolonnas platums rūtiņās, lai visi ķeksīši stāv vienā līnijā.
 const ETIKETES_PLATUMS = 7
 
@@ -127,10 +124,27 @@ function grupa(s: Sesija, a: Atzimes, an: Analizes, iz: Izdariti, at: Atskaites)
   return s.status === 'nav' ? 'bez' : 'pabeigtas'
 }
 
-/** Kartītes satura paraksts (darbi, atskaite, statuss), lai pamanītu izmaiņas, ko lietotājs vēl nav redzējis. */
+/** Kartītes satura paraksts (statuss, darbi, atskaite), lai pamanītu jaunumus, ko lietotājs vēl nav redzējis. */
 function paraksts(s: Sesija, an: Analizes, at: Atskaites): string {
   const r = an[s.id]?.isGatava ? an[s.id] : undefined
   return JSON.stringify([s.status, r?.tev.map(d => d.darbs) ?? [], r?.claude.map(d => d.darbs) ?? [], at[s.id]?.laiks ?? 0])
+}
+
+/**
+ * Vai kartītē ir kas JAUNS pret redzēto: jauns darbs, jaunāka atskaite vai statuss, kurā sesija sāk gaidīt
+ * lietotāju. Noņemšana vai notīrīšana nav jaunums (citādi pulsē arī pabeigtās kartītes bez iemesla).
+ */
+function irJaunumi(redzets: string | undefined, tagad: string): boolean {
+  if (redzets === undefined || redzets === tagad) return false
+  try {
+    const [st0, tev0, cl0, at0] = JSON.parse(redzets) as [string, string[], string[], number]
+    const [st1, tev1, cl1, at1] = JSON.parse(tagad) as [string, string[], string[], number]
+    if (at1 > at0) return true
+    if (st1 !== st0 && !MIERIGI.has(st1)) return true
+    return tev1.some(x => !tev0.includes(x)) || cl1.some(x => !cl0.includes(x))
+  } catch {
+    return true
+  }
 }
 
 /** Vai divi darbi ir viens un tas pats (modelis to pašu mēdz uzrakstīt nedaudz citādi). */
@@ -147,16 +161,26 @@ function grupet(
   an: Analizes,
   iz: Izdariti,
   at: Atskaites,
-  sec: readonly string[],
 ): Grupas {
   const g: Grupas = { gaida: [], turpinat: [], bez: [], pabeigtas: [] }
   for (const s of sesijas) g[grupa(s, a, an, iz, at)].push(s)
-  // lietotāja secība (↑ ↓) pirmā; jaunās sesijas aiz tām, svaigākās augšā (dati.py jau tā sakārto).
-  const vieta = new Map(sec.map((id, i) => [id, i]))
-  for (const saraksts of Object.values(g)) {
-    saraksts.sort((x, y) => (vieta.get(x.id) ?? Infinity) - (vieta.get(y.id) ?? Infinity))
-  }
+  // Kā sānjoslā: pēdējā aktīvā sesija augšā.
+  for (const saraksts of Object.values(g)) saraksts.sort((x, y) => y.last - x.last)
   return g
+}
+
+/** Kurā dienu grupā ir laiks (pret atjaunošanas brīdi): kā sānjoslā. */
+function dienasGrupa(ms: number, tagad: number): 'sodien' | 'vakar' | 'nedela' | 'agrak' {
+  const dienasSakums = (x: number) => {
+    const d = new Date(x)
+    d.setHours(0, 0, 0, 0)
+    return d.getTime()
+  }
+  const starpiba = Math.round((dienasSakums(tagad || ms) - dienasSakums(ms)) / 86_400_000)
+  if (starpiba <= 0) return 'sodien'
+  if (starpiba === 1) return 'vakar'
+  if (starpiba < 7) return 'nedela'
+  return 'agrak'
 }
 
 function isis(text: string, max: number): string {
@@ -273,10 +297,8 @@ async function atjaunot($: EngineInterface): Promise<void> {
   const an = await apgrieztClaude($, (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {})
   const a = (await lasitStore<Atzimes>($, STORE_ATZIMES)) ?? {}
   const iz = (await lasitStore<Izdariti>($, STORE_IZDARITI)) ?? {}
-  const sec = (await lasitStore<string[]>($, STORE_SECIBA)) ?? []
   const at = await iztiritAtskaites($, (await lasitStore<Atskaites>($, STORE_ATSKAITES)) ?? {}, an)
   const paslepti = (await lasitStore<Record<string, string>>($, STORE_PASLEPTI_REPO)) ?? {}
-  await update($, seciba, () => sec)
   await update($, atskaites, () => at)
   await update($, pasleptiRepo, () => paslepti)
   await update($, analizes, () => an)
@@ -284,19 +306,23 @@ async function atjaunot($: EngineInterface): Promise<void> {
   await update($, izdariti, () => iz)
 
   // Sesijas, kuras redzam pirmo reizi, skaitās jau redzētas: pulsē tikai tas, kas mainās pēc tam.
+  // Arī tad, ja kartītē kaut kas tikai pazuda (nav jaunums), redzētais tiek pielīdzināts, lai pēc tam pulsē tikai jaunais.
   const red = (await lasitStore<Record<string, string>>($, STORE_REDZETI)) ?? {}
-  const jaunas = j.sesijas.filter(s => red[s.id] === undefined)
-  if (jaunas.length > 0) {
-    for (const s of jaunas) red[s.id] = paraksts(s, an, at)
-    await $.store.set(STORE_REDZETI, red)
+  let isRedMainits = false
+  for (const s of j.sesijas) {
+    const tagad = paraksts(s, an, at)
+    if (red[s.id] === tagad || (red[s.id] !== undefined && irJaunumi(red[s.id], tagad))) continue
+    red[s.id] = tagad
+    isRedMainits = true
   }
+  if (isRedMainits) await $.store.set(STORE_REDZETI, red)
   await update($, redzeti, () => red)
 
   const repoIzvele = (await lasitStore<Record<string, string>>($, STORE_REPO_SESIJAS)) ?? {}
   await update($, repoSesijas, () => repoIzvele)
   const padomi = (await lasitStore<boolean>($, STORE_PADOMI)) ?? radiPadomusNoklusejums
   await update($, radiPadomus, () => padomi)
-  const g = grupet(j.sesijas, a, an, iz, at, sec)
+  const g = grupet(j.sesijas, a, an, iz, at)
   // Kartītes, kurām .komanda.json lika pārbaudīt no jauna (last 0), pārbauda arī tad, ja tās tagad ir pabeigtajās.
   const piespiestas = j.sesijas.filter(s => an[s.id]?.isGatava && an[s.id]?.last === 0)
   void autoAnalize($, [...new Set([...g.gaida, ...g.turpinat, ...piespiestas])], now)
@@ -628,19 +654,6 @@ function parsetAtskaiti(text: string, sesijas: readonly Sesija[]): { id: string;
   return pec ? { id: pec.id, teksts } : null
 }
 
-/** Pārvieto kartīti grupā par vienu vietu augšup vai lejup; saglabā kopējo secību. */
-async function parvietot($: EngineInterface, grupa: readonly string[], id: string, virziens: -1 | 1): Promise<void> {
-  const i = grupa.indexOf(id)
-  const j = i + virziens
-  if (i < 0 || j < 0 || j >= grupa.length) return
-  const jauna = [...grupa]
-  ;[jauna[i], jauna[j]] = [jauna[j] as string, jauna[i] as string]
-  const visa = (await lasitStore<string[]>($, STORE_SECIBA)) ?? []
-  const nakama = [...jauna, ...visa.filter(x => !jauna.includes(x))]
-  await $.store.set(STORE_SECIBA, nakama)
-  await update($, seciba, () => nakama)
-}
-
 export const register: Register = (on, options) => {
   t = TEKSTI[options.valoda === 'en' ? 'en' : 'lv']
   vards = typeof options.vards === 'string' ? options.vards.trim() : ''
@@ -730,7 +743,6 @@ export const register: Register = (on, options) => {
     const iz = await read($, izdariti)
     const parbaudamas = await read($, parbauda)
     const izverstie = await read($, izversti)
-    const sec = await read($, seciba)
     const at = await read($, atskaites)
     const paslepti = await read($, pasleptiRepo)
     const ievadesNr = await read($, ievadesSkaits)
@@ -747,7 +759,6 @@ export const register: Register = (on, options) => {
       an,
       iz,
       at,
-      sec,
     )
     const sisGrupa = sisSesija ? grupa(sisSesija, a, an, iz, at) : undefined
 
@@ -755,7 +766,7 @@ export const register: Register = (on, options) => {
       await update($, zinja, () => isis(teksts, 240))
       $.ui.toast(isis(teksts, 160), { timeoutMs: 6000 })
     }
-    const isJauns = (s: Sesija) => red[s.id] !== undefined && red[s.id] !== paraksts(s, an, at)
+    const isJauns = (s: Sesija) => irJaunumi(red[s.id], paraksts(s, an, at))
     // lietotājs kaut ko darīja ar kartīti: tās pašreizējais saturs skaitās redzēts, punkts vairs nepulsē.
     const apskatits = async (s: Sesija) => {
       if (!isJauns(s)) return
@@ -919,12 +930,7 @@ export const register: Register = (on, options) => {
       const atpakal = p('atgriezt', IKONA.atgriezt, t.padoms.atgriezt, atgriezt(s))
       if (gr === 'bez') return [atpakal, p('gatavs', IKONA.gatavs, t.padoms.gatavs, gatavs(s)), ...arhivs]
       if (gr === 'pabeigtas') return [atpakal, ...arhivs]
-      const ids = g[gr].map(x => x.id)
-      return [
-        p('augsa', IKONA.augsa, t.padoms.augsa, () => parvietot($, ids, s.id, -1)),
-        p('leja', IKONA.leja, t.padoms.leja, () => parvietot($, ids, s.id, 1)),
-        p('gatavs', IKONA.gatavs, t.padoms.gatavs, gatavs(s)),
-      ]
+      return [p('gatavs', IKONA.gatavs, t.padoms.gatavs, gatavs(s))]
     }
 
     type DarbaRinda = {
@@ -1332,12 +1338,28 @@ export const register: Register = (on, options) => {
       )
     }
 
+    // Datuma virsraksts pirms katras jaunas dienu grupas, kā sānjoslā (Šodien, Vakar, …).
+    const arDatumiem = (gr: Grupa, saraksts: Sesija[], isPilna: boolean) =>
+      saraksts.flatMap((s, i) => {
+        const diena = dienasGrupa(s.last, d.laiks)
+        const ieprieks = i > 0 ? dienasGrupa((saraksts[i - 1] as Sesija).last, d.laiks) : undefined
+        return [
+          ...(diena !== ieprieks
+            ? [
+                <Text key={`diena:${gr}:${diena}`} dimColor italic>
+                  {t.dienas[diena]}
+                </Text>,
+              ]
+            : []),
+          kartite(gr, s, isPilna),
+        ]
+      })
     const sadala = (gr: Grupa, v: Veids, teksts: string, tukss: string, isPilna: boolean) =>
       g[gr].length === 0 && tukss === '' ? null : (
         <Box flexDirection="column">
           {virsraksts(v, teksts, g[gr].length)}
           {g[gr].length === 0 && <Text dimColor>{tukss}</Text>}
-          {g[gr].map(s => kartite(gr, s, isPilna))}
+          {arDatumiem(gr, g[gr], isPilna)}
         </Box>
       )
 
@@ -1353,7 +1375,7 @@ export const register: Register = (on, options) => {
               onPress={() => update($, radiPabeigtas, x => !x)}
             />
           </Box>
-          {radaPabeigtas && g.pabeigtas.map(s => kartite('pabeigtas', s, false))}
+          {radaPabeigtas && arDatumiem('pabeigtas', g.pabeigtas, false)}
         </Box>
       )
 

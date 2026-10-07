@@ -18,6 +18,7 @@ const lv = {
   nenopusots: 'Nenopušots',
   bezStatusa: 'Bez statusa',
   pabeigtas: 'Pabeigtas, nav arhivētas',
+  dienas: { sodien: 'Šodien', vakar: 'Vakar', nedela: 'Pēdējās 7 dienas', agrak: 'Agrāk' },
   ikonuNosaukumi: {
     gaida: 'Gaida tevi',
     parskatit: 'Jāpārskata',
@@ -40,8 +41,6 @@ const lv = {
     arhivet: 'Arhivēt',
     atgriezt: 'Atgriezt',
     gatavs: 'Gatavs',
-    augsa: 'Augšā',
-    leja: 'Lejā',
     izdarits: 'Izdarīts',
     atcelt: 'Atcelt',
     nosutits: 'Nosūtīts',
@@ -158,6 +157,7 @@ const en: Teksti = {
   nenopusots: 'Not pushed',
   bezStatusa: 'No status',
   pabeigtas: 'Done, not archived',
+  dienas: { sodien: 'Today', vakar: 'Yesterday', nedela: 'Last 7 days', agrak: 'Older' },
   ikonuNosaukumi: {
     gaida: 'Waiting for you',
     parskatit: 'To review',
@@ -180,8 +180,6 @@ const en: Teksti = {
     arhivet: 'Archive',
     atgriezt: 'Bring back',
     gatavs: 'Done',
-    augsa: 'Up',
-    leja: 'Down',
     izdarits: 'Done',
     atcelt: 'Undo',
     nosutits: 'Sent',

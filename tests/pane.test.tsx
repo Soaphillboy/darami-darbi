@@ -111,7 +111,7 @@ test('kartītes: Tev čeklists ar Atvērt, Claude ķeksīši bez Kopēt', async 
     expect(await atrodi(ui, 'atvert-darbu:a:1')).toBeUndefined()
     expect(await atrodi(ui, 'turpini:a:0')).toBeDefined()
     expect(await atrodi(ui, 'kopet:t:0')).toBeUndefined()
-    expect(await atrodi(ui, 'augsa:a')).toBeDefined()
+    expect(await atrodi(ui, 'gatavs:a')).toBeDefined()
     expect(await atrodi(ui, 'atvert:x')).toBeDefined()
     expect(await atrodi(ui, 'atvert:b')).toBeUndefined()
     expect(await atrodi(ui, 'repo-teksts:0')).toBeDefined()
@@ -129,7 +129,7 @@ test('ķeksītis atzīmē, bet kartīte paliek savā vietā', async ($, on) => {
   expect(await atrodi(ui, 'atvert-darbu:a:0')).toBeUndefined()
   await ui.press({ key: 'keksis:a:1' } as any)
   // Visi Tev darbi atzīmēti, bet kartīte joprojām ir "Gaida tevi" ar ↑ ↓ ✓, nevis pārlēkusi citur.
-  expect(await atrodi(ui, 'augsa:a')).toBeDefined()
+  expect(await atrodi(ui, 'gatavs:a')).toBeDefined()
   expect(await atrodi(ui, 'keksis:a:1')).toBeDefined()
   await ui.unmount()
 })
@@ -144,28 +144,37 @@ test('Claude ▷ palaiž darbu tajā sesijā vienreiz', async ($, on) => {
   expect(await teksts(ui, /Nosūtīts uz "Sesija t"/)).toBeDefined()
   // Tas bija vienīgais darbs, tāpēc kartīte pārgāja uz pabeigtajām.
   expect(d.suti.length).toBe(1)
-  expect(await atrodi(ui, 'augsa:t')).toBeUndefined()
+  expect(await atrodi(ui, 'gatavs:t')).toBeUndefined()
   await ui.unmount()
 })
 
-test('↑ ↓ maina secību grupā, ✓ paslēpj', async ($, on) => {
-  const { krātuve } = dzinejs(on)
-  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
-  await ui.press({ key: 'atjaunot' } as any)
-  expect(krātuve.get('seciba')).toBeUndefined()
-  await ui.press({ key: 'leja:t' } as any)
-  expect((krātuve.get('seciba') as string[]).slice(0, 2)).toEqual(['c', 't'])
-  await ui.press({ key: 'augsa:t' } as any)
-  expect((krātuve.get('seciba') as string[]).slice(0, 2)).toEqual(['t', 'c'])
-  // ↑ pirmajai kartītei neko nemaina.
-  await ui.press({ key: 'augsa:t' } as any)
-  expect((krātuve.get('seciba') as string[]).slice(0, 2)).toEqual(['t', 'c'])
-
-  await ui.press({ key: 'gatavs:a' } as any)
-  expect(await atrodi(ui, 'augsa:a')).toBeUndefined()
-  await ui.press({ key: 'radit-pabeigtas' } as any)
-  expect(await atrodi(ui, 'atgriezt:a')).toBeDefined()
-  await ui.unmount()
+test('kārtots pēc pēdējās aktivitātes ar datumu virsrakstiem; ✓ paslēpj', async ($, on) => {
+  dzinejs(on)
+  const diena = 86_400_000
+  const tagad = 1791300000000
+  const sA = DATI.sesijas[0] as { last: number }
+  const sT = DATI.sesijas[1] as { last: number }
+  const sC = DATI.sesijas[3] as { last: number }
+  sA.last = tagad - 3 * diena
+  sT.last = tagad - 1000
+  sC.last = tagad - diena
+  try {
+    const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+    await ui.press({ key: 'atjaunot' } as any)
+    expect(await teksts(ui, /^Šodien$/)).toBeDefined()
+    expect(await teksts(ui, /^Vakar$/)).toBeDefined()
+    expect(await teksts(ui, /^Pēdējās 7 dienas$/)).toBeDefined()
+    expect(await atrodi(ui, 'augsa:t')).toBeUndefined()
+    await ui.press({ key: 'gatavs:a' } as any)
+    expect(await atrodi(ui, 'gatavs:a')).toBeUndefined()
+    await ui.press({ key: 'radit-pabeigtas' } as any)
+    expect(await atrodi(ui, 'atgriezt:a')).toBeDefined()
+    await ui.unmount()
+  } finally {
+    sA.last = 5
+    sT.last = 5
+    sC.last = 5
+  }
 })
 
 test('✓ nepārraksta citas sesijas atzīmes ar vecu kopiju', async ($, on) => {
@@ -216,7 +225,7 @@ test('pogu atslēgas ir ASCII, ko aplikācija nemaina', async ($, on) => {
   dzinejs(on)
   const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
   await ui.press({ key: 'atjaunot' } as any)
-  for (const key of ['keksis:a:0', 'atvert-darbu:a:0', 'turpini:a:0', 'augsa:a']) {
+  for (const key of ['keksis:a:0', 'atvert-darbu:a:0', 'turpini:a:0', 'gatavs:a']) {
     expect(/^[A-Za-z0-9:_-]{1,64}$/.test(key)).toBe(true)
     expect(await atrodi(ui, key)).toBeDefined()
   }
@@ -255,9 +264,9 @@ test('kad visi darbi izdarīti, kartīte pati pāriet uz pabeigtajām', async ($
   await ui.press({ key: 'atjaunot' } as any)
   await ui.press({ key: 'keksis:a:0' } as any)
   await ui.press({ key: 'keksis:a:1' } as any)
-  expect(await atrodi(ui, 'augsa:a')).toBeDefined()
+  expect(await atrodi(ui, 'gatavs:a')).toBeDefined()
   await ui.press({ key: 'turpini:a:0' } as any)
-  expect(await atrodi(ui, 'augsa:a')).toBeUndefined()
+  expect(await atrodi(ui, 'gatavs:a')).toBeUndefined()
   await ui.press({ key: 'radit-pabeigtas' } as any)
   expect(await atrodi(ui, 'atgriezt:a')).toBeDefined()
   await ui.unmount()
@@ -291,7 +300,7 @@ test('atskaite no citas sesijas parādās tās kartītē, ✕ to aizver', async 
   await ui.press({ key: 'atjaunot' } as any)
   // ▷ palaiž vienīgo darbu → kartīte pāriet uz pabeigtajām.
   await ui.press({ key: 'turpini:t:0' } as any)
-  expect(await atrodi(ui, 'augsa:t')).toBeUndefined()
+  expect(await atrodi(ui, 'gatavs:t')).toBeUndefined()
   // Sesija atsūta atskaiti → kartīte atkal redzama ar atskaiti.
   const r = await ($ as any).session.receive({ origin: { kind: 'peer' }, text: ZINA('t', 'Sesija t', 'Testi iziet 76/76.\nSīkāk: viss izvietots.') })
   expect(r.text).toContain('Testi iziet')
@@ -303,7 +312,7 @@ test('atskaite no citas sesijas parādās tās kartītē, ✕ to aizver', async 
   expect(await teksts(ui, /Sīkāk: viss izvietots/)).toBeDefined()
   await ui.press({ key: 'atskaite-aizvert:t' } as any)
   expect(await atrodi(ui, 'atskaite:t')).toBeUndefined()
-  expect(await atrodi(ui, 'augsa:t')).toBeUndefined()
+  expect(await atrodi(ui, 'gatavs:t')).toBeUndefined()
   await ui.unmount()
 })
 
@@ -340,7 +349,7 @@ test('jauna analīze nenoņem neatzīmētos Tev darbus, tikai pieliek jaunus', a
     expect(an?.tev.map(x => x.darbs)).toEqual(['Ievadi paroli', 'Atbildi klientam'])
     // Arī nepalaistais Claude darbs paliek, lai gan modelis to vairs nemin.
     expect((an as unknown as { claude: { darbs: string }[] }).claude.map(x => x.darbs)).toEqual(['Izveidot CRM lapas'])
-    expect(await atrodi(ui, 'augsa:a')).toBeDefined()
+    expect(await atrodi(ui, 'gatavs:a')).toBeDefined()
   } finally {
     ANALIZES['Sesija a'] = veca
     sesijaA.last = 5
@@ -467,7 +476,7 @@ test('pogām ir padomi, kas parādās, uzbraucot ar peli', async ($, on) => {
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface, ...PANE } as any)
     await ui.press({ key: 'atjaunot' } as any)
-    for (const padoms of [/^ Augšā $/, /^ Atmest $/, /^ Palaist $/, /^ Izdarīts $/, /^ Atvērt sesiju $/]) {
+    for (const padoms of [/^ Gatavs $/, /^ Atmest $/, /^ Palaist $/, /^ Izdarīts $/, /^ Atvērt sesiju $/]) {
       expect(await teksts(ui, padoms)).toBeDefined()
     }
     await ui.unmount()
@@ -478,11 +487,11 @@ test('/darbi padomi pārslēdz padomus un atceras to krātuvē', async ($, on) =
   const d = dzinejs(on)
   const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
   await ui.press({ key: 'atjaunot' } as any)
-  expect(await teksts(ui, /^ Augšā $/)).toBeDefined()
+  expect(await teksts(ui, /^ Gatavs $/)).toBeDefined()
   const r = await ($ as any).command.run({ command: 'darbi', args: 'padomi' })
   expect(JSON.stringify(r)).toContain('izslēgti')
   expect(d.krātuve.get('padomi')).toBe(false)
-  expect(await teksts(ui, /^ Augšā $/)).toBeUndefined()
+  expect(await teksts(ui, /^ Gatavs $/)).toBeUndefined()
   await ($ as any).command.run({ command: 'darbi', args: 'padomi' })
   expect(d.krātuve.get('padomi')).toBe(true)
   await ui.unmount()
@@ -492,8 +501,8 @@ test('ar izslēgtiem padomiem tie netiek zīmēti', { options: { radiPadomus: fa
   dzinejs(on)
   const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
   await ui.press({ key: 'atjaunot' } as any)
-  expect(await teksts(ui, /^ Augšā $/)).toBeUndefined()
-  expect(await atrodi(ui, 'augsa:a')).toBeDefined()
+  expect(await teksts(ui, /^ Gatavs $/)).toBeUndefined()
+  expect(await atrodi(ui, 'gatavs:a')).toBeDefined()
   await ui.unmount()
 })
 
@@ -681,7 +690,7 @@ test('angļu valoda: panelis, padomi un sesijām sūtītie teksti angliski', { o
   const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
   await ui.press({ key: 'atjaunot' } as any)
   expect(await teksts(ui, /^Waiting for you$/)).toBeDefined()
-  expect(await teksts(ui, /^ Up $/)).toBeDefined()
+  expect(await teksts(ui, /^ Open session $/)).toBeDefined()
   expect(await teksts(ui, /^You$/)).toBeDefined()
   expect(d.jautajumi.at(-1)).toContain('Session: Sesija')
   await ui.press({ key: 'nodot:a:0' } as any)
@@ -782,5 +791,23 @@ test('.komanda.json notīra Claude darbus un liek visas sesijas pārbaudīt no j
   const an = d.krātuve.get('analizes3') as Record<string, { tev: { darbs: string }[]; claude: { darbs: string }[] }>
   expect(an.a?.tev.map(x => x.darbs)).toEqual(['Izlem par domēniem', 'Ievadi paroli'])
   expect(an.a?.claude.map(x => x.darbs)).toEqual(['Izveidot CRM lapas'])
+  await ui.unmount()
+})
+
+test('punkts nepulsē, ja darbi tikai pazuda (piemēram, notīrīti Claude darbi)', async ($, on) => {
+  const faili: Record<string, string> = {}
+  dzinejs(on, { faili })
+  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+  const jauns = () => teksts(ui, /Jaunas izmaiņas/)
+  await ui.press({ key: 'atjaunot' } as any)
+  for (const k of ['teksts:a:t0', 'teksts:t:c0', 'teksts:c:c0']) {
+    await ui.press({ key: k } as any)
+    await ui.press({ key: k } as any)
+  }
+  expect(await jauns()).toBeUndefined()
+  faili['.komanda.json'] = JSON.stringify({ tiritClaude: true })
+  await ui.press({ key: 'atjaunot' } as any)
+  delete faili['.komanda.json']
+  expect(await jauns()).toBeUndefined()
   await ui.unmount()
 })
