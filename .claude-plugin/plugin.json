@@ -1,0 +1,57 @@
+{
+  "name": "valejie-darbi",
+  "version": "0.11.0",
+  "description": "Darāmie darbi: sānu panelis ar visu Claude sesiju darbiem (tev ☐, Claude ▷), secība, atskaites, nenopušoti repo",
+  "author": {
+    "name": "Edgars Feščenko"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "atvertAutomatiski": {
+      "type": "boolean",
+      "title": "Atvērt paneli katrā jaunā sesijā",
+      "description": "Darāmo darbu panelis atveras pats, kad sākas sesija, bez /darbi.",
+      "required": false,
+      "default": true
+    },
+    "radiPadomus": {
+      "type": "boolean",
+      "title": "Rādīt padomus, uzbraucot ar peli",
+      "description": "Paskaidrojums pie katras pogas, kad pele ir virs tās. Pārslēgt var arī ar /darbi padomi.",
+      "required": false,
+      "default": true
+    },
+    "zinotParAtskaitem": {
+      "type": "boolean",
+      "title": "Paziņojums un skaņa, kad pienāk atskaite",
+      "description": "macOS paziņojums ar skaņu, kad cita sesija atsūta atskaiti pēc ▷.",
+      "required": false,
+      "default": true
+    },
+    "valoda": {
+      "type": "string",
+      "title": "Valoda / Language",
+      "description": "Paneļa, padomu un analīzes valoda: lv vai en.",
+      "required": false,
+      "default": "lv",
+      "options": [
+        "lv",
+        "en"
+      ]
+    },
+    "vards": {
+      "type": "string",
+      "title": "Tavs vārds",
+      "description": "Kā sesijām un analīzei tevi saukt (nominatīvā, piemēram Edgars). Tukšs = lietotājs.",
+      "required": false,
+      "default": ""
+    },
+    "repoMapes": {
+      "type": "string",
+      "title": "Papildu mapes repo meklēšanai",
+      "description": "Komatiem atdalītas mapes, kurās meklēt nenopušotus git repo (līdz 3 līmeņiem dziļi). Sesiju mapes tiek pārbaudītas vienmēr.",
+      "required": false,
+      "default": ""
+    }
+  }
+}

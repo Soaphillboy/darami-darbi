@@ -1,0 +1,9 @@
+# Engine laid types (written on every load), local state and inbox files
+.claude-plugin/types/
+.pievienot.json
+.pedeja-riks.json
+.pedeja-arhivesana.json
+.atgadinajumi-kess.json
+__pycache__/
+node_modules/
+.DS_Store
