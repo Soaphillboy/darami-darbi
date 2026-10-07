@@ -257,9 +257,6 @@ test('kad visi darbi izdarīti, kartīte pati pāriet uz pabeigtajām', async ($
   await ui.press({ key: 'keksis:a:1' } as any)
   expect(await atrodi(ui, 'augsa:a')).toBeDefined()
   await ui.press({ key: 'turpini:a:0' } as any)
-  // Viss izdarīts, bet ☐ vēl nav paziņoti: kartīte gaida "▷ Paziņot un turpināt".
-  expect(await atrodi(ui, 'pazinot:a')).toBeDefined()
-  await ui.press({ key: 'pazinot:a' } as any)
   expect(await atrodi(ui, 'augsa:a')).toBeUndefined()
   await ui.press({ key: 'radit-pabeigtas' } as any)
   expect(await atrodi(ui, 'atgriezt:a')).toBeDefined()
@@ -635,28 +632,6 @@ test('ar izslēgtu iestatījumu atskaite pienāk klusi', { options: { zinotParAt
   await ui.unmount()
 })
 
-test('▷ Paziņot un turpināt: parādās, kad visi ☐ atzīmēti, un nosūta izdarīto', async ($, on) => {
-  const d = dzinejs(on)
-  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
-  await ui.press({ key: 'atjaunot' } as any)
-  expect(await atrodi(ui, 'pazinot:a')).toBeUndefined()
-  await ui.press({ key: 'keksis:a:0' } as any)
-  expect(await atrodi(ui, 'pazinot:a')).toBeUndefined()
-  await ui.press({ key: 'keksis:a:1' } as any)
-  expect(await atrodi(ui, 'pazinot:a')).toBeDefined()
-  await ui.press({ key: 'pazinot:a' } as any)
-  const zina = d.suti.at(-1) as { session_id: string; message: string }
-  expect(zina.session_id).toBe('a')
-  expect(zina.message).toContain('- Izlem par domēniem')
-  expect(zina.message).toContain('- Ievadi paroli')
-  expect(zina.message).toContain('Turpini darbu.')
-  // Klusā piezīme vairs netiek gaidīta, poga pazūd; Claude ▷ darbs vēl palicis, tāpēc kartīte pie Claude.
-  expect((d.krātuve.get('pazinojumi') as Record<string, unknown>).a).toBeUndefined()
-  expect(await atrodi(ui, 'pazinot:a')).toBeUndefined()
-  expect(await atrodi(ui, 'turpini:a:0')).toBeDefined()
-  await ui.unmount()
-})
-
 test('repo rindā var izvēlēties citu sesiju pušo komandai un atgriezt automātisko', async ($, on) => {
   const d = dzinejs(on)
   const ui = (await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)) as any
@@ -709,12 +684,10 @@ test('angļu valoda: panelis, padomi un sesijām sūtītie teksti angliski', { o
   expect(await teksts(ui, /^ Up $/)).toBeDefined()
   expect(await teksts(ui, /^You$/)).toBeDefined()
   expect(d.jautajumi.at(-1)).toContain('Session: Sesija')
-  await ui.press({ key: 'keksis:a:0' } as any)
-  await ui.press({ key: 'keksis:a:1' } as any)
-  await ui.press({ key: 'pazinot:a' } as any)
+  await ui.press({ key: 'nodot:a:0' } as any)
   const zina = (d.suti.at(-1) as { message: string }).message
-  expect(zina).toContain('Anna did and checked:')
-  expect(zina).toContain('Continue your work.')
+  expect(zina).toContain('Help me get this done: Izlem par domēniem')
+  expect(zina).toContain('If you need me')
   await ui.unmount()
 })
 
@@ -776,5 +749,20 @@ test('.pievienot.json "izdarits" izņem darbu un ieraksta izdarīto atmiņā', a
   const an = d.krātuve.get('analizes3') as Record<string, { tev: { darbs: string }[] }>
   expect(an.a?.tev.map(x => x.darbs)).toEqual(['Izlem par domēniem'])
   expect((d.krātuve.get('izdaritiVesture') as Record<string, string[]>).a).toEqual(['Ievadi paroli'])
+  await ui.unmount()
+})
+
+test('kartītē ne vairāk kā 2 nepalaisti Claude darbi, arī vecajās analīzēs', async ($, on) => {
+  const d = dzinejs(on)
+  d.krātuve.set('analizes3', {
+    t: {
+      last: 5, sakts: 1, isGatava: true, tev: [], isPabeigts: false,
+      claude: ['V1', 'V2', 'V3', 'V4'].map(x => ({ darbs: x, prompts: x })),
+    },
+  })
+  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+  await ui.press({ key: 'atjaunot' } as any)
+  const an = d.krātuve.get('analizes3') as Record<string, { claude: { darbs: string }[] }>
+  expect(an.t?.claude.map(x => x.darbs)).toEqual(['V3', 'V4'])
   await ui.unmount()
 })

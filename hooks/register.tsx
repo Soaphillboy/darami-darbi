@@ -40,8 +40,6 @@ const STORE_PAZINOJUMI = 'pazinojumi'
 const STORE_VESTURE = 'izdaritiVesture'
 // Ko lietotājs kartītē jau redzēja: { sesijasId: paraksts }; ja paraksts mainās, punkts pulsē.
 const STORE_REDZETI = 'redzeti'
-// "▷ Paziņot un turpināt": { sesijasId: kuri ☐ darbi tika paziņoti }; tas pats saraksts otrreiz netiek piedāvāts.
-const STORE_PAZINOTS = 'pazinots'
 // lietotāja izvēlētā sesija repo "pušo" komandai, ja automātiskā ir nepareiza: { repoCeļš: sesijasId }.
 const STORE_REPO_SESIJAS = 'repoSesijas'
 // /darbi padomi: vai rādīt padomus (pārspēj iestatījumu "radiPadomus").
@@ -53,6 +51,8 @@ const GATAVS_PECAK_MS = 10 * 60 * 1000
 const AUTO_ANALIZES = 3
 const SLEDZENE_MS = 3 * 60 * 1000
 const KLUSUMS_MS = 2 * 60 * 1000
+// Cik nepalaistu Claude darbu kartītē rāda (jaunākos); vairāk tikai sajauc ar to, ko Claude jau dara.
+const MAX_CLAUDE = 2
 
 // Valoda un lietotāja vārds no iestatījumiem; register() tos ieliek pirms visa cita.
 let t: Teksti = TEKSTI.lv
@@ -71,7 +71,6 @@ const pasleptiRepo = atom({ plugin: 'valejie-darbi', key: 'pasleptiRepo' } as co
 const ievadesSkaits = atom({ plugin: 'valejie-darbi', key: 'ievadesSkaits' } as const, 0)
 // Ko lietotājs pašlaik raksta katras kartītes ievades laukā (lai ✓ un ➤ zina tekstu); tikai šai sesijai.
 const redzeti = atom({ plugin: 'valejie-darbi', key: 'redzeti' } as const, {} as Record<string, string>)
-const pazinots = atom({ plugin: 'valejie-darbi', key: 'pazinots' } as const, {} as Record<string, string>)
 const radiPadomus = atom({ plugin: 'valejie-darbi', key: 'radiPadomus' } as const, true)
 const repoSesijas = atom({ plugin: 'valejie-darbi', key: 'repoSesijas' } as const, {} as Record<string, string>)
 const ievadesTeksts = atom({ plugin: 'valejie-darbi', key: 'ievadesTeksts' } as const, {} as Record<string, string>)
@@ -105,12 +104,7 @@ type Grupas = Record<Grupa, Sesija[]>
 const tevAtslega = (s: Sesija, d: TevDarbs) => `${s.id}|t|${d.darbs}`
 const claudeAtslega = (s: Sesija, d: ClaudeDarbs) => `${s.id}|c|${d.darbs}`
 
-/** Kuri ☐ darbi kartītē atzīmēti (paraksts "▷ Paziņot un turpināt" pogai). */
-function tevParaksts(r: Analize): string {
-  return JSON.stringify(r.tev.map(d => d.darbs).sort())
-}
-
-function grupa(s: Sesija, a: Atzimes, an: Analizes, iz: Izdariti, at: Atskaites, paz: Record<string, string>): Grupa {
+function grupa(s: Sesija, a: Atzimes, an: Analizes, iz: Izdariti, at: Atskaites): Grupa {
   const atz = a[s.id]
   if (atz?.veids === 'gatavs' && s.last <= (atz.kad ?? atz.last) + GATAVS_PECAK_MS) return 'pabeigtas'
   const r = an[s.id]?.isGatava ? an[s.id] : undefined
@@ -120,11 +114,9 @@ function grupa(s: Sesija, a: Atzimes, an: Analizes, iz: Izdariti, at: Atskaites,
   if (at[s.id]) return atvertiTev === 0 && atvertiClaude > 0 ? 'turpinat' : 'gaida'
   // ↑ no pabeigtajām: kartīte atpakaļ sarakstā, līdz ✓.
   if (atz?.veids === 'turpinat') return atvertiTev > 0 ? 'gaida' : 'turpinat'
-  // Kartīte paliek savā grupā, kamēr kāds darbs vēl nav izdarīts (atsevišķs ķeksis to nepārbīda); kad visi ☐
-  // atzīmēti, tā gaida "▷ Paziņot un turpināt" (vai ✓); kad viss izdarīts un paziņots, pāriet uz pabeigtajām.
+  // Kartīte paliek savā grupā, kamēr kāds darbs vēl nav izdarīts (atsevišķs ķeksis to nepārbīda);
+  // kad visi ☐ atzīmēti un visi ▷ palaisti, tā pati pāriet uz pabeigtajām.
   if (r) {
-    const isNepazinots = r.tev.length > 0 && atvertiTev === 0 && paz[s.id] !== tevParaksts(r)
-    if (isNepazinots) return 'gaida'
     if (r.tev.length + r.claude.length > 0 && atvertiTev + atvertiClaude === 0) return 'pabeigtas'
     if (r.tev.length > 0) return 'gaida'
     if (r.claude.length > 0) return 'turpinat'
@@ -155,11 +147,10 @@ function grupet(
   an: Analizes,
   iz: Izdariti,
   at: Atskaites,
-  paz: Record<string, string>,
   sec: readonly string[],
 ): Grupas {
   const g: Grupas = { gaida: [], turpinat: [], bez: [], pabeigtas: [] }
-  for (const s of sesijas) g[grupa(s, a, an, iz, at, paz)].push(s)
+  for (const s of sesijas) g[grupa(s, a, an, iz, at)].push(s)
   // lietotāja secība (↑ ↓) pirmā; jaunās sesijas aiz tām, svaigākās augšā (dati.py jau tā sakārto).
   const vieta = new Map(sec.map((id, i) => [id, i]))
   for (const saraksts of Object.values(g)) {
@@ -278,7 +269,7 @@ async function atjaunot($: EngineInterface): Promise<void> {
 
   // Analīzes, atzīmes un ķeksīši var būt mainīti citā sesijā: paņem kopīgo stāvokli no krātuves.
   await pievienotNoFaila($, j.sesijas)
-  const an = (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {}
+  const an = await apgrieztClaude($, (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {})
   const a = (await lasitStore<Atzimes>($, STORE_ATZIMES)) ?? {}
   const iz = (await lasitStore<Izdariti>($, STORE_IZDARITI)) ?? {}
   const sec = (await lasitStore<string[]>($, STORE_SECIBA)) ?? []
@@ -300,13 +291,11 @@ async function atjaunot($: EngineInterface): Promise<void> {
   }
   await update($, redzeti, () => red)
 
-  const paz = (await lasitStore<Record<string, string>>($, STORE_PAZINOTS)) ?? {}
-  await update($, pazinots, () => paz)
   const repoIzvele = (await lasitStore<Record<string, string>>($, STORE_REPO_SESIJAS)) ?? {}
   await update($, repoSesijas, () => repoIzvele)
   const padomi = (await lasitStore<boolean>($, STORE_PADOMI)) ?? radiPadomusNoklusejums
   await update($, radiPadomus, () => padomi)
-  const g = grupet(j.sesijas, a, an, iz, at, paz, sec)
+  const g = grupet(j.sesijas, a, an, iz, at, sec)
   void autoAnalize($, [...g.gaida, ...g.turpinat], now)
 
   const dalas = []
@@ -371,7 +360,7 @@ async function analizet($: EngineInterface, s: Sesija, isPiespiedu: boolean): Pr
           : parsets.claude.filter(
               n => !vecieClaude.some(v => lidzigs(v.darbs, n.darbs)) && !atmesti.some(x => lidzigs(x, n.darbs)),
             )),
-      ].slice(0, 4)
+      ].slice(-MAX_CLAUDE)
       visas[s.id] = {
         last: s.last,
         sakts: now,
@@ -439,6 +428,25 @@ async function parslegtIzdaritu($: EngineInterface, atslega: string, isIzdarits:
   }
   await mainit(STORE_PAZINOJUMI, 20)
   await mainit(STORE_VESTURE, 30)
+}
+
+/** Kartītēs ne vairāk kā MAX_CLAUDE nepalaistu Claude darbu (jaunākie paliek); palaistie (✓) netiek skaitīti. */
+async function apgrieztClaude($: EngineInterface, an: Analizes): Promise<Analizes> {
+  const iz = (await lasitStore<Izdariti>($, STORE_IZDARITI)) ?? {}
+  let isMainits = false
+  const out: Analizes = {}
+  for (const [id, r] of Object.entries(an)) {
+    const nepalaisti = r.claude.filter(c => iz[`${id}|c|${c.darbs}`] === undefined)
+    if (nepalaisti.length <= MAX_CLAUDE) {
+      out[id] = r
+      continue
+    }
+    const paliek = new Set(nepalaisti.slice(-MAX_CLAUDE))
+    out[id] = { ...r, claude: r.claude.filter(c => iz[`${id}|c|${c.darbs}`] !== undefined || paliek.has(c)) }
+    isMainits = true
+  }
+  if (isMainits) await $.store.set(STORE_ANALIZES, out)
+  return isMainits ? out : an
 }
 
 /**
@@ -696,7 +704,6 @@ export const register: Register = (on, options) => {
     const red = await read($, redzeti)
     const radaPabeigtas = await read($, radiPabeigtas)
     const msg = await read($, zinja)
-    const paz = await read($, pazinots)
     const repoIzvele = await read($, repoSesijas)
     const isPadomi = await read($, radiPadomus)
     // Sesija, kurā esi, ir pati augšā savā sadaļā (ar visiem darbiem), lai pēc pārslēgšanās tās darāmais ir uzreiz redzams.
@@ -707,10 +714,9 @@ export const register: Register = (on, options) => {
       an,
       iz,
       at,
-      paz,
       sec,
     )
-    const sisGrupa = sisSesija ? grupa(sisSesija, a, an, iz, at, paz) : undefined
+    const sisGrupa = sisSesija ? grupa(sisSesija, a, an, iz, at) : undefined
 
     const pazinot = async (teksts: string) => {
       await update($, zinja, () => isis(teksts, 240))
@@ -1053,42 +1059,6 @@ export const register: Register = (on, options) => {
     }
 
     // Sesijas atsūtītā atskaite: pirmā rinda kā poga (uzspiežot atveras viss teksts), ✕ to aizver.
-    // Visi ☐ atzīmēti: vienā klikšķī pasaka sesijai, kas izdarīts, un liek turpināt (citādi tā gaidītu tavu ziņu).
-    const pazinotUnTurpinat = (s: Sesija, r: Analize) => async () => {
-      const teksts = [
-        t.izdarijaUnParbaudija(vards),
-        ...r.tev.map(d => `- ${d.darbs}`),
-        t.turpiniDarbu,
-      ].join('\n')
-      if (!(await sutitSesijai(s, teksts))) return
-      // Sesija jau zina: klusā piezīme par šiem darbiem vairs nav vajadzīga.
-      const piezimes = (await lasitStore<Record<string, string[]>>($, STORE_PAZINOJUMI)) ?? {}
-      const { [s.id]: _nodotas, ...citas } = piezimes
-      await $.store.set(STORE_PAZINOJUMI, citas)
-      const visi = (await lasitStore<Record<string, string>>($, STORE_PAZINOTS)) ?? {}
-      const nakamie = { ...visi, [s.id]: tevParaksts(r) }
-      await $.store.set(STORE_PAZINOTS, nakamie)
-      await update($, pazinots, () => nakamie)
-      await apskatits(s)
-    }
-    const pazinosanasRinda = (s: Sesija) => {
-      const r = an[s.id]
-      if (!r?.isGatava || r.tev.length === 0) return null
-      const isVisiAtzimeti = r.tev.every(d => iz[tevAtslega(s, d)] !== undefined)
-      if (!isVisiAtzimeti || paz[s.id] === tevParaksts(r)) return null
-      return (
-        <Box flexDirection="row" marginTop={1}>
-          <Box width={ETIKETES_PLATUMS} flexShrink={0} />
-          {arPadomu(
-            `pazinot:${s.id}`,
-            t.padoms.izdaritsTurpini,
-            <Button key={`pazinot:${s.id}`} label={t.pazinotUnTurpinat} onPress={pazinotUnTurpinat(s, r)} />,
-            'kreisi',
-          )}
-        </Box>
-      )
-    }
-
     const atskaitesBloks = (s: Sesija) => {
       const r = at[s.id]
       if (!r) return null
@@ -1322,7 +1292,6 @@ export const register: Register = (on, options) => {
             <Box flexDirection="column" marginLeft={2}>
               {ievadesRinda(s)}
               {darbuRindas(s)}
-              {pazinosanasRinda(s)}
               {atskaitesBloks(s)}
             </Box>
           )}

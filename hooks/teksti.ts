@@ -34,7 +34,6 @@ const lv = {
   gaidaParbaudi: 'Gaida pārbaudi',
   nekasVairs: 'Nekas vairs nav jādara.',
   nosutis: (prompts: string) => `Nosūtīs: ${prompts}`,
-  pazinotUnTurpinat: '▷ Paziņot un turpināt',
   jaunsDarbsVieta: 'Jauns darbs',
 
   padoms: {
@@ -58,7 +57,6 @@ const lv = {
     sisSesija: 'Šī sesija',
     atvertSesiju: 'Atvērt sesiju',
     jaunasIzmainas: 'Jaunas izmaiņas: atvērt sesiju',
-    izdaritsTurpini: 'Nosūtīt: izdarīts, turpini',
     ieliktPuso: 'Ielikt pušo',
     nosutitPuso: (sesija: string) => `Nosūtīt pušo: ${sesija}`,
   },
@@ -109,8 +107,6 @@ const lv = {
     ]
       .filter(Boolean)
       .join('\n'),
-  izdarijaUnParbaudija: (vards: string) => `${vards || 'Lietotājs'} izdarīja un pārbaudīja:`,
-  turpiniDarbu: 'Turpini darbu.',
   piezime: (vards: string, darbi: string[]) =>
     [
       `Piezīme no Darāmo darbu paneļa: ${vards || 'lietotājs'} atzīmēja šos darbus kā izdarītus un pārbaudītus:`,
@@ -178,7 +174,6 @@ const en: Teksti = {
   gaidaParbaudi: 'Waiting for a check',
   nekasVairs: 'Nothing left to do.',
   nosutis: (prompts: string) => `Will send: ${prompts}`,
-  pazinotUnTurpinat: '▷ Report and continue',
   jaunsDarbsVieta: 'New task',
 
   padoms: {
@@ -202,7 +197,6 @@ const en: Teksti = {
     sisSesija: 'This session',
     atvertSesiju: 'Open session',
     jaunasIzmainas: 'New changes: open session',
-    izdaritsTurpini: 'Send: done, continue',
     ieliktPuso: 'Put "push" in prompt',
     nosutitPuso: (sesija: string) => `Send push: ${sesija}`,
   },
@@ -252,8 +246,6 @@ const en: Teksti = {
     ]
       .filter(Boolean)
       .join('\n'),
-  izdarijaUnParbaudija: (vards: string) => `${vards || 'The user'} did and checked:`,
-  turpiniDarbu: 'Continue your work.',
   piezime: (vards: string, darbi: string[]) =>
     [
       `Note from the To-dos panel: ${vards || 'the user'} marked these tasks as done and checked:`,

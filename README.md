@@ -63,7 +63,6 @@ Pārbaudīts tikai uz macOS: panelis lasa aplikācijas sesiju failus `~/Library/
 | ➤ (uzbraucot ar peli) | Nodod tavu darbu Claude tajā sesijā |
 | ▷ | Palaiž Claude darbu tajā sesijā |
 | ✕ pie Claude darba | Atmet darbu, analīze to vairs nepiedāvā |
-| ▷ Paziņot un turpināt | Parādās, kad visi tavi ☐ atzīmēti. Pasaka sesijai, kas izdarīts, un liek turpināt |
 | + | Jauns darbs. Enter vai ✓ saglabā, ➤ uzreiz nosūta Claude. `c:` priekšā = Claude darbs |
 | ↑ ↓ | Maina secību |
 | ✓ | Gatavs, kartīte pāriet uz pabeigtajām |

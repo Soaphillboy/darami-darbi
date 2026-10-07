@@ -81,7 +81,6 @@ declare module 'claude-code' {
       ievadesSkaits: number
       ievadesTeksts: Record<string, string>
       redzeti: Record<string, string>
-      pazinots: Record<string, string>
       repoSesijas: Record<string, string>
       radiPadomus: boolean
       parbauda: string[]
