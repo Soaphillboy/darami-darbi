@@ -460,7 +460,13 @@ async function iztiritAtskaites($: EngineInterface, at: Atskaites, an: Analizes)
  * "nonemt": ["…"], "nonemtAtskaiti": true }] (`nonemt` izņem darbus ar šādu tekstu, `nonemtAtskaiti` izmet atskaiti).
  * Pēc ielādes fails tiek izdzēsts.
  */
-type Pievienojamie = { tev?: string[]; claude?: { darbs?: string; prompts?: string }[]; nonemt?: string[] }
+type Pievienojamie = {
+  tev?: string[]
+  claude?: { darbs?: string; prompts?: string }[]
+  nonemt?: string[]
+  // Kā ☐: izņem no kartītes un ieraksta izdarīto atmiņā, lai analīze to vairs nepiedāvā.
+  izdarits?: string[]
+}
 
 /**
  * Pieliek (vai noņem) darbus sesijas kartītē: lietotājs no ievades lauka vai `.pievienot.json`. Pieliktie ir parasti
@@ -469,6 +475,12 @@ type Pievienojamie = { tev?: string[]; claude?: { darbs?: string; prompts?: stri
 async function pievienotDarbus($: EngineInterface, s: Sesija, p: Pievienojamie): Promise<void> {
   const visas = (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {}
   const veca = visas[s.id]?.isGatava ? (visas[s.id] as Analize) : undefined
+  const izdarits = (p.izdarits ?? []).filter((x): x is string => typeof x === 'string')
+  if (izdarits.length > 0) {
+    const vesture = (await lasitStore<Record<string, string[]>>($, STORE_VESTURE)) ?? {}
+    const bija = (vesture[s.id] ?? []).filter(x => !izdarits.includes(x))
+    await $.store.set(STORE_VESTURE, { ...vesture, [s.id]: [...bija, ...izdarits].slice(-30) })
+  }
   // Tikai noņemt, bet nav no kā: neveido tukšu analīzi, kas aizstātu īsto.
   if (!veca && !p.tev?.length && !p.claude?.length) return
   const tev = [...(veca?.tev ?? [])]
@@ -484,7 +496,7 @@ async function pievienotDarbus($: EngineInterface, s: Sesija, p: Pievienojamie):
       claude.push({ darbs: c.darbs.trim().slice(0, 2000), prompts: c.prompts.slice(0, 2000) })
     }
   }
-  const nonemt = (p.nonemt ?? []).filter((x): x is string => typeof x === 'string')
+  const nonemt = [...(p.nonemt ?? []), ...izdarits].filter((x): x is string => typeof x === 'string')
   const paliek = (darbs: string) => !nonemt.some(n => lidzigs(n, darbs))
   visas[s.id] = {
     // Bez iepriekšējas analīzes: last 0, lai sesiju tik un tā izanalizē (pieliktie darbi paliek).

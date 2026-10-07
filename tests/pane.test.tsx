@@ -764,3 +764,17 @@ test('sesija, kurā esi, ir augšā sadaļā "Šī sesija"; atjaunot ir ikona �
     sesijaB.sis = false
   }
 })
+
+test('.pievienot.json "izdarits" izņem darbu un ieraksta izdarīto atmiņā', async ($, on) => {
+  const faili: Record<string, string> = {}
+  const d = dzinejs(on, { faili })
+  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+  await ui.press({ key: 'atjaunot' } as any)
+  faili['.pievienot.json'] = JSON.stringify([{ sesija: 'a', izdarits: ['Ievadi paroli'] }])
+  await ui.press({ key: 'atjaunot' } as any)
+  delete faili['.pievienot.json']
+  const an = d.krātuve.get('analizes3') as Record<string, { tev: { darbs: string }[] }>
+  expect(an.a?.tev.map(x => x.darbs)).toEqual(['Izlem par domēniem'])
+  expect((d.krātuve.get('izdaritiVesture') as Record<string, string[]>).a).toEqual(['Ievadi paroli'])
+  await ui.unmount()
+})
