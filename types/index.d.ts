@@ -10,7 +10,22 @@ export type Sesija = {
   cwd: string
   last: number
   sis: boolean
+  /** Dzīva procesa stāvoklis: busy (strādā), shell, idle (pabeidza), waiting (jautā tev); tukšs, ja process nav dzīvs. */
+  stavoklis: string
+  /** Kopš kura brīža šis stāvoklis (ms), 0 bez dzīva procesa. */
+  stavoklisKops: number
+  /** Šī gājiena gaita no sarunas faila (strādājošai, jautājošai un šai sesijai), citādi null. */
+  gaita: Gaita | null
 }
+
+/** Šī gājiena soļi (rīku izsaukumi), pēdējais rīks un tā mērķis; jautājums, ja Claude gaida atbildi. */
+export type Gaita = { soli: number; riks: string; merkis: string; jautajums: string; gaidaAtlauju: boolean }
+
+/** Laika un soļu aplēse gājiena sākumā: `min` un `soli` pēc korekcijas, `raw*` modeļa sākotnējā. */
+export type Novertejums = { turnId: string; sakts: number; min: number; soli: number; rawMin: number; rawSoli: number }
+
+/** Pabeigts gājiens korekcijai: aplēse (`n` min, `ns` soļi) pret patieso (`f` min, `fs` soļi). */
+export type Ilgums = { s: string; n: number; f: number; ns: number; fs: number }
 
 /** Nenopušots repo; `commiti` un `faili` rāda, izvēršot; `sig` mainās līdz ar repo stāvokli. */
 export type Repo = {
@@ -29,8 +44,8 @@ export type Repo = {
 export type ValejieDati = { sesijas: Sesija[]; repo: Repo[]; laiks: number; kluda: string }
 
 /**
- * lietotāja paša atzīme sesijai. `turpinat` = piesprausta pie darbiem; `gatavs` = paslēpta, līdz sesijā atkal kaut kas
- * notiek vairāk nekā 10 min pēc atzīmes (`kad`).
+ * lietotāja paša atzīme sesijai: `gatavs` = sakļauta ar ▾, līdz sesija pēc atzīmes (`kad`) kaut ko pabeidz vai jautā.
+ * `turpinat` ir no vecākas versijas un vairs neko nemaina.
  */
 export type Atzime = { veids: 'turpinat' | 'gatavs'; last: number; kad?: number }
 
@@ -42,12 +57,16 @@ export type Atzimes = Record<string, Atzime>
  */
 export type TevDarbs = { darbs: string; sikak: string; atvert: string }
 
-/** Darbs, ko Claude var izdarīt pats; `prompts` ir ziņa, ko nosūtīt tajā sesijā. */
-export type ClaudeDarbs = { darbs: string; prompts: string }
+/**
+ * Nākamais prompts tajā sesijā: `darbs` ir īsais teksts pogai, `prompts` ir tas, ko nosūtīt. Sesija tos pēc katra
+ * gājiena uzraksta no jauna; `pats` = lietotāja paša pielikts ("c:"), tas paliek, līdz to nosūta.
+ */
+export type ClaudeDarbs = { darbs: string; prompts: string; pats?: boolean }
 
 /**
- * Modeļa analīze vienai sesijai. `isGatava` false = pirmā analīze vēl top. `veido` = kad kāda sesija sāka veidot
- * jaunu (līdz tam redzami vecie darbi). lietotāja neatzīmētie `tev` darbi pāriet uz nākamo analīzi.
+ * Sesijas nākamie soļi, ko tā pati uzraksta pēc katra gājiena: `tev` ir lietotāja darbi (neatzīmētie pāriet uz
+ * nākamo reizi), `claude` ir līdz 3 nākamajiem promptiem. `last` = sesijas pēdējā darbība tajā brīdī.
+ * `veido` ir no vecākas versijas.
  */
 export type Analize = {
   last: number
@@ -85,8 +104,10 @@ declare module 'claude-code' {
       radiPadomus: boolean
       parbauda: string[]
       izversti: string[]
-      radiPabeigtas: boolean
       zinja: string
+      zinjaLaiks: number
+      notikumi: Record<string, number>
+      novertejumi: Record<string, Novertejums>
     }
   }
 }

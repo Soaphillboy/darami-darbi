@@ -19,6 +19,8 @@ PAPILDU_MAPES = [m.strip() for m in (sys.argv[2] if len(sys.argv) > 2 else '').s
 REPO_DZILUMS = 3
 IZLAIST_MAPES = {'.git', '.claude', 'node_modules', '.venv', 'venv', '__pycache__', 'dist', 'build', '.next'}
 MEM_DB = os.path.expanduser('~/.claude-mem/claude-mem.db')
+# Dzīvo Claude procesu faili (pid.json): stāvoklis busy / shell / idle / waiting un kopš kura brīža.
+PROCESU_MAPE = os.path.expanduser('~/.claude/sessions')
 
 
 def mem_savienojums():
@@ -44,9 +46,41 @@ def nakamie_soli(db, cli_id):
     return (row[0] or '').strip() if row else ''
 
 
+def dzivi_stavokli(mape=PROCESU_MAPE):
+    """Dzīvo procesu stāvoklis pa CLI sesijām: { cliSessionId: (status, statusUpdatedAt) }.
+
+    busy = strādā, idle = pabeidza, waiting = jautā lietotājam vai gaida atļauju. Mirušu procesu faili netiek ņemti.
+    """
+    out = {}
+    for f in glob.glob(os.path.join(mape, '*.json')):
+        try:
+            with open(f) as fh:
+                d = json.load(fh)
+            pid = int(d.get('pid') or 0)
+            if pid <= 0:
+                continue
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                continue
+            except PermissionError:
+                pass
+        except Exception:
+            continue
+        sid = d.get('sessionId') or ''
+        st = d.get('status') or ''
+        kad = d.get('statusUpdatedAt') or 0
+        if not sid or not st:
+            continue
+        if sid not in out or kad > out[sid][1]:
+            out[sid] = (st, kad)
+    return out
+
+
 def sesijas():
     out = []
     db = mem_savienojums()
+    dzivi = dzivi_stavokli()
     for f in glob.glob(os.path.join(BASE, '*', '*', 'local_*.json')):
         try:
             with open(f) as fh:
@@ -69,7 +103,14 @@ def sesijas():
             'cwd': d.get('cwd') or '',
             'nakamie': nakamie_soli(db, d.get('cliSessionId')),
             'sis': bool(SIS) and d.get('cliSessionId') == SIS,
+            'stavoklis': dzivi.get(d.get('cliSessionId') or '', ('', 0))[0],
+            'stavoklisKops': dzivi.get(d.get('cliSessionId') or '', ('', 0))[1],
+            'gaita': None,
         })
+        s = out[-1]
+        if s['cli'] and (s['stavoklis'] in ('busy', 'shell', 'waiting') or s['sis']):
+            tcels = transkripta_cels(s['cli'])
+            s['gaita'] = pasreizeja_gaita(tcels) if tcels else None
     out.sort(key=lambda s: s['last'], reverse=True)
     return out
 
@@ -109,6 +150,83 @@ def _ievades(ieraksts):
         if isinstance(b, dict) and b.get('type') == 'tool_use':
             out.append((b.get('name') or '', b.get('input') or {}))
     return out
+
+
+def _merkis(nosaukums, ievade, cwd=''):
+    """Īss rīka mērķis rādīšanai: fails (pēdējās divas ceļa daļas), komanda, meklējums, jautājums."""
+    fails = ievade.get('file_path') or ievade.get('notebook_path') or ievade.get('path') or ''
+    if fails and nosaukums != 'Grep':
+        return '/'.join(fails.rstrip('/').split('/')[-2:])
+    if nosaukums == 'Bash':
+        return (ievade.get('description') or (ievade.get('command') or '').strip().split('\n')[0])[:60]
+    if nosaukums in ('Grep', 'Glob'):
+        return (ievade.get('pattern') or '')[:60]
+    if nosaukums == 'WebFetch':
+        return re.sub(r'^https?://', '', ievade.get('url') or '').split('/')[0][:60]
+    if nosaukums == 'WebSearch':
+        return (ievade.get('query') or '')[:60]
+    if nosaukums in ('Agent', 'Task'):
+        return (ievade.get('description') or '')[:60]
+    if nosaukums == 'AskUserQuestion':
+        jaut = ievade.get('questions') or []
+        return ((jaut[0] or {}).get('question') or '')[:200] if jaut and isinstance(jaut[0], dict) else ''
+    if nosaukums == 'Skill':
+        return (ievade.get('skill') or '')[:60]
+    if nosaukums.startswith('mcp__'):
+        return nosaukums.split('__')[-1][:60]
+    return ''
+
+
+def pasreizeja_gaita(cels):
+    """Šī gājiena gaita pēc sarunas faila: no pēdējā lietotāja prompta līdz beigām.
+
+    soli = rīku izsaukumi, riks + merkis = pēdējais izsaukums, jautajums = AskUserQuestion bez atbildes,
+    gaidaAtlauju = pēdējais izsaukums vēl bez rezultāta (aplikācija prasa atļauju). None, ja faila nav.
+    """
+    try:
+        aste = _aste(cels)
+    except OSError:
+        return None
+    soli = 0
+    pedejais = None
+    atbildeti = set()
+    for rinda in reversed(aste.splitlines()):
+        try:
+            ier = json.loads(rinda)
+        except ValueError:
+            continue
+        if ier.get('isMeta') or ier.get('isSidechain'):
+            continue
+        tips = ier.get('type')
+        if tips == 'user':
+            saturs = (ier.get('message') or {}).get('content')
+            if isinstance(saturs, str):
+                if saturs.strip():
+                    break
+                continue
+            bloki = [b for b in (saturs or []) if isinstance(b, dict)]
+            rezultati = [b for b in bloki if b.get('type') == 'tool_result']
+            for b in rezultati:
+                atbildeti.add(b.get('tool_use_id'))
+            if not rezultati and any(b.get('type') == 'text' and (b.get('text') or '').strip() for b in bloki):
+                break
+        elif tips == 'assistant':
+            for b in reversed((ier.get('message') or {}).get('content') or []):
+                if isinstance(b, dict) and b.get('type') == 'tool_use':
+                    soli += 1
+                    if pedejais is None:
+                        pedejais = (b.get('name') or '', b.get('input') or {}, b.get('id'), ier.get('cwd') or '')
+    if pedejais is None:
+        return {'soli': 0, 'riks': '', 'merkis': '', 'jautajums': '', 'gaidaAtlauju': False}
+    nosaukums, ievade, tid, cwd = pedejais
+    bez_atbildes = tid not in atbildeti
+    return {
+        'soli': soli,
+        'riks': nosaukums,
+        'merkis': _merkis(nosaukums, ievade, cwd),
+        'jautajums': _merkis(nosaukums, ievade) if nosaukums == 'AskUserQuestion' and bez_atbildes else '',
+        'gaidaAtlauju': bez_atbildes and nosaukums != 'AskUserQuestion',
+    }
 
 
 def atbildiga_sesija(cels, sesijas_saraksts, faili=(), transkripts=transkripta_cels):

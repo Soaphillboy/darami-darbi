@@ -86,3 +86,77 @@ class AtbildigaSesija(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DziviStavokli(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def fails(self, nosaukums, saturs):
+        with open(os.path.join(self.dir.name, nosaukums), 'w') as fh:
+            json.dump(saturs, fh)
+
+    def test_dziva_procesa_stavoklis_miruso_neņem_jaunakais_uzvar(self):
+        dzivs = os.getpid()
+        self.fails('1.json', {'pid': dzivs, 'sessionId': 'a', 'status': 'waiting', 'statusUpdatedAt': 200})
+        self.fails('2.json', {'pid': dzivs, 'sessionId': 'a', 'status': 'idle', 'statusUpdatedAt': 100})
+        self.fails('3.json', {'pid': dzivs, 'sessionId': 'b', 'status': 'busy', 'statusUpdatedAt': 50})
+        # Miris process (pid, kura nav) netiek ņemts.
+        self.fails('4.json', {'pid': 2 ** 22 + 12345, 'sessionId': 'c', 'status': 'idle', 'statusUpdatedAt': 300})
+        self.fails('5.json', {'pid': dzivs, 'sessionId': 'd'})
+        with open(os.path.join(self.dir.name, '6.json'), 'w') as fh:
+            fh.write('{bojāts')
+        self.assertEqual(dati.dzivi_stavokli(self.dir.name), {'a': ('waiting', 200), 'b': ('busy', 50)})
+
+
+def _rinda(tips, saturs, **citi):
+    return json.dumps({'type': tips, 'message': {'content': saturs}, **citi})
+
+
+def _riks(tid, nosaukums, ievade):
+    return {'type': 'tool_use', 'id': tid, 'name': nosaukums, 'input': ievade}
+
+
+class PasreizejaGaita(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.cels = os.path.join(self.dir.name, 'saruna.jsonl')
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def gaita(self, rindas):
+        with open(self.cels, 'w') as fh:
+            fh.write('\n'.join(rindas) + '\n')
+        return dati.pasreizeja_gaita(self.cels)
+
+    def test_skaita_tikai_sī_gājiena_soļus_un_rāda_pēdējo(self):
+        g = self.gaita([
+            _rinda('user', 'Iepriekšējais prompts'),
+            _rinda('assistant', [_riks('v1', 'Read', {'file_path': '/a/vecs.py'})]),
+            _rinda('user', [{'type': 'tool_result', 'tool_use_id': 'v1'}]),
+            _rinda('user', [{'type': 'text', 'text': 'Salabo testus'}]),
+            _rinda('assistant', [{'type': 'text', 'text': 'Labi.'}, _riks('t1', 'Read', {'file_path': '/p/hooks/a.ts'})]),
+            _rinda('user', [{'type': 'tool_result', 'tool_use_id': 't1'}]),
+            # Sistēmas piezīme (isMeta) nav jauns gājiens.
+            _rinda('user', [{'type': 'text', 'text': 'piezīme'}], isMeta=True),
+            _rinda('assistant', [_riks('t2', 'Edit', {'file_path': '/p/hooks/register.tsx'})]),
+            _rinda('user', [{'type': 'tool_result', 'tool_use_id': 't2'}]),
+            _rinda('assistant', [_riks('t3', 'Bash', {'command': 'npm test -- --watch=false', 'description': 'Palaiž testus'})]),
+        ])
+        self.assertEqual(g, {'soli': 3, 'riks': 'Bash', 'merkis': 'Palaiž testus', 'jautajums': '', 'gaidaAtlauju': True})
+
+    def test_jautājums_bez_atbildes_un_fails_īsi(self):
+        g = self.gaita([
+            _rinda('user', 'Publicē video'),
+            _rinda('assistant', [_riks('t1', 'Write', {'file_path': '/u/klienti/video/apraksts.md'})]),
+            _rinda('user', [{'type': 'tool_result', 'tool_use_id': 't1'}]),
+            _rinda('assistant', [_riks('t2', 'AskUserQuestion', {'questions': [{'question': 'Publicēt šodien vai rīt?'}]})]),
+        ])
+        self.assertEqual(g['soli'], 2)
+        self.assertEqual(g['jautajums'], 'Publicēt šodien vai rīt?')
+        self.assertFalse(g['gaidaAtlauju'])
+        self.assertEqual(dati._merkis('Write', {'file_path': '/u/klienti/video/apraksts.md'}), 'video/apraksts.md')

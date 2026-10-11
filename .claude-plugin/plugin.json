@@ -1,7 +1,7 @@
 {
   "name": "valejie-darbi",
-  "version": "0.12.1",
-  "description": "Darāmie darbi: sānu panelis ar visu Claude sesiju darbiem (tev ☐, Claude ▷), secība, atskaites, nenopušoti repo",
+  "version": "0.12.2",
+  "description": "Darāmie darbi: sānu panelis ar visu Claude sesiju darbiem (tev ☐, 3 nākamie prompti ▷, progress), atskaites, nenopušoti repo",
   "author": {
     "name": "Edgars Feščenko"
   },
@@ -59,6 +59,13 @@
       "description": "Komatiem atdalītas mapes, kurās meklēt nenopušotus git repo (līdz 3 līmeņiem dziļi). Sesiju mapes tiek pārbaudītas vienmēr.",
       "required": false,
       "default": ""
+    },
+    "platums": {
+      "type": "number",
+      "title": "Paneļa platums",
+      "description": "Cik rakstzīmju plats panelis atveras (sāns blakus sarunai). Ja paneli pats pavelc platāku vai šaurāku, tavs izmērs uzvar.",
+      "required": false,
+      "default": 60
     }
   },
   "license": "MIT",

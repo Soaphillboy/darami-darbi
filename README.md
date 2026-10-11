@@ -1,8 +1,8 @@
 # Darāmie darbi (To-dos) for Claude Code
 
-Sānu panelis Claude Code aplikācijā, kas rāda visu tavu Claude sesiju iesāktos darbus vienuviet: kas gaida tevi, ko Claude var turpināt pats, kas nav nopušots.
+Sānu panelis Claude Code aplikācijā, kas rāda visu tavu Claude sesiju darbus vienuviet: kas gaida tevi, ko katrā sesijā darīt tālāk, kas nav nopušots.
 
-A side panel for the Claude Code desktop app that shows the open work of all your Claude sessions in one place: what waits for you, what Claude can continue on its own, what is not pushed. [English below](#english).
+A side panel for the Claude Code desktop app that shows the work of all your Claude sessions in one place: what waits for you, what to do next in each session, what is not pushed. [English below](#english).
 
 ---
 
@@ -13,25 +13,29 @@ A side panel for the Claude Code desktop app that shows the open work of all you
 Tev ir 10 atvērtas sesijas, un katrā kaut kas palika pusē. Panelis tās savāc vienā sarakstā:
 
 ```
-● creators.lv mājaslapa  +                                    ✓
-  Tev     ☐ Izlem, kuru domēnu pirkt                  Atvērt
-          ☐ Pārskati jauno sākumlapas tekstu
-  Claude  ▷ ✕  Izdzēs testa lapas
-  14:02   Atskaite: testi iziet 76/76…                    ✕
+● creators.lv mājaslapa  strādā                             + ▾
+  Labo hooks/sakums.tsx · 12/~20 soļi             vēl ~3 min
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━──────────────────────────────
+  ☐ Izlem, kuru domēnu pirkt                          Atvērt
+  ☐ Pārskati jauno sākumlapas tekstu
+  ▷ ✕ Palaid testus jaunajai sākumlapai
+  ▷ ✕ Commito izmaiņas
+  14:02 Atskaite: testi iziet 76/76…                       ✕
 ```
 
-- **Tev ☐** ir darbi, kas jādara tev pašam: lēmums, parole, melnraksta pārskatīšana. Atzīmē, kad izdarīts.
-- **Claude ▷** ir darbi, ko Claude var izdarīt pats. Uzspied ▷, un darbs aiziet uz to sesiju, Claude sāk strādāt.
+- **Strādājošai sesijai** zem nosaukuma redzams, ko tā dara tagad (fails, komanda), cik soļu jau izdarīts un cik vēl atlicis, un josla. Ja Claude tev jautā, tur ir pats jautājums vai tas, kam vajag tavu atļauju.
+- **☐** ir darbi, ko vari izdarīt tikai tu: lēmums, kaut kas jāapskata (fails, melnraksts, artefakts, lapa), nosūtīšana no tava konta, zvans. Kad sesija izveido kaut ko apskatāmu, tur vienmēr ir "Pārskati …" ar Atvērt. Atzīmē, kad izdarīts.
+- **▷** ir līdz 3 nākamajiem promptiem, ko sesija pati uzraksta pēc katra sava gājiena, kā [next-steps](https://github.com/anthropics/claude-plugins-community). Uzspied ▷, un prompts aiziet uz to sesiju, Claude sāk strādāt.
 - **Atskaite** ir tas, ko sesija atsūta atpakaļ pēc ▷. Pienāk ar macOS paziņojumu un skaņu.
 - **Nenopušots** rāda git repo ar nenopušotiem commitiem vai mainītiem failiem. **pušo** nosūta komandu tai sesijai, kas ar repo strādāja.
 
-Darbus latviski uzraksta Sonnet no sesijas sarunas, [claude-mem](https://github.com/thedotmack/claude-mem) kopsavilkuma un aplikācijas statusa. Tavi neatzīmētie darbi paliek, līdz tu tos atzīmē. Jauna analīze tikai pieliek jaunus.
+Augšā ir sesija, kas pēdējā pabeidza darbu vai sāka tev ko jautāt. Sesija, kas vēl strādā, sarakstā nelēkā. Pie nosaukuma redzams **jautā tev** (Claude gaida tavu atbildi vai atļauju) vai **strādā**. ▾ sakļauj kartīti līdz vienai rindai turpat sarakstā, un tā atveras pati, kolīdz sesija kaut ko pabeidz vai jautā. Krāsainais punkts pulsē, kad kartītē ir kaut kas jauns.
 
 ### Ko vajag
 
 - Claude Code aplikācija (macOS) ar modiem (function hooks), versija 2.1.288 vai jaunāka
 - `python3` un `git`
-- Neobligāti: claude-mem, lai tālākie soļi būtu precīzāki
+- Neobligāti: [claude-mem](https://github.com/thedotmack/claude-mem). Tā kopsavilkumu kartīte rāda, kamēr sesijai vēl nav savu nākamo soļu
 
 Pārbaudīts tikai uz macOS: panelis lasa aplikācijas sesiju failus `~/Library/Application Support/Claude`, failus atver ar `open`, paziņojumus rāda ar `osascript`.
 
@@ -52,25 +56,24 @@ Pārbaudīts tikai uz macOS: panelis lasa aplikācijas sesiju failus `~/Library/
    }
    ```
 
-   `CLAUDE_CODE_PLUGIN_DIR_WATCH` ļauj izmaiņām modā parādīties uzreiz, bez sesijas restarta. Atļauja `archive_session` vajadzīga pogai 🗄: auto režīmā klasifikators citādi atteic arhivēšanu, jo pogas spiediens nav sarunā.
+   `CLAUDE_CODE_PLUGIN_DIR_WATCH` ļauj izmaiņām modā parādīties uzreiz, bez sesijas restarta. Atļauja `archive_session` vajadzīga arhivēšanas pogai: auto režīmā klasifikators citādi to atteic, jo pogas spiediens nav sarunā.
 3. Atver jaunu sesiju. Panelis atveras pats. Ja aizver, atver ar `/darbi`.
 
 ### Pogas
 
 | Poga | Ko dara |
 |---|---|
-| ☐ / ☑ | Atzīmē tavu darbu kā izdarītu. Sesija to uzzina klusi ar tavu nākamo ziņu tur |
+| ☐ / ☑ | Atzīmē tavu darbu kā izdarītu. Sesija to uzzina klusi ar tavu nākamo ziņu tur. Pēc 10 minūtēm atzīmētais pazūd no kartītes |
 | ➤ (uzbraucot ar peli) | Nodod tavu darbu Claude tajā sesijā |
-| ▷ | Palaiž Claude darbu tajā sesijā |
-| ✕ pie Claude darba | Atmet darbu, analīze to vairs nepiedāvā |
-| + | Jauns darbs. Enter vai ✓ saglabā, ➤ uzreiz nosūta Claude. `c:` priekšā = Claude darbs |
-| ✕ kartītes galvenē | Paslēpj kartīti, tā pāriet uz pabeigtajām. Atgriežas pati, ja sesijā kaut kas notiek |
-| ↑ pabeigtajās | Atgriež kartīti sarakstā |
-| 🗄 | Arhivē sesiju |
+| ▷ | Nosūta promptu tajā sesijā (sesijā, kurā esi, iesniedz to kā tavu promptu). Nosūtītais pazūd pēc 10 minūtēm |
+| ✕ pie prompta | Atmet promptu, un sesija to vairs neiesaka |
+| + | Jauns darbs. Enter vai ✓ saglabā, ➤ uzreiz nosūta Claude. `c:` priekšā = tavs prompts, kas paliek, līdz to nosūti |
+| ▾ / ▸ | Sakļauj kartīti līdz nosaukuma rindai vai atver to. Sakļautā atveras pati, kad sesija pabeidz darbu vai jautā |
+| arhīva ikona sakļautā kartītē | Arhivē sesiju |
 | Atvērt | Atver failu blakus sarunai vai saiti pārlūkā |
 | pušo | Nosūta "pušo &lt;repo&gt;" atbildīgajai sesijai. Sesiju var nomainīt izvēlnē → |
 
-Kartītes sakārtotas kā sānjoslā: pēdējā aktīvā sesija augšā, ar datumiem (Šodien, Vakar, Pēdējās 7 dienas, Agrāk). Sesija, kurā esi, vienmēr ir pati augšā. Krāsainais punkts pulsē, kad kartītē ir kaut kas jauns: jauns darbs, atskaite vai sesija sāk gaidīt tevi.
+Kartītes sakārtotas pēc tā, kad sesija pēdējo reizi pabeidza darbu vai sāka jautāt, ar datumiem (Šodien, Vakar, Pēdējās 7 dienas, Agrāk). Sesija, kurā esi, vienmēr ir pati augšā.
 
 ### Komandas
 
@@ -91,7 +94,8 @@ Kartītes sakārtotas kā sānjoslā: pēdējā aktīvā sesija augšā, ar datu
         "repoMapes": "~/Movies/projekts",
         "atvertAutomatiski": true,
         "radiPadomus": true,
-        "zinotParAtskaitem": true
+        "zinotParAtskaitem": true,
+        "platums": 60
       }
     }
   }
@@ -100,22 +104,24 @@ Kartītes sakārtotas kā sānjoslā: pēdējā aktīvā sesija augšā, ar datu
 
 | Iestatījums | Ko nozīmē |
 |---|---|
-| `valoda` | `lv` vai `en`: panelis, padomi un analīze |
+| `valoda` | `lv` vai `en`: panelis, padomi un nākamie soļi |
 | `vards` | Kā sesijām tevi saukt ("Edgars izdarīja…"). Tukšs = "lietotājs" |
 | `repoMapes` | Papildu mapes (ar komatiem), kurās meklēt git repo. Sesiju mapes tiek pārbaudītas vienmēr |
 | `atvertAutomatiski` | Panelis atveras katrā jaunā sesijā |
 | `radiPadomus` | Paskaidrojumi pie pogām |
 | `zinotParAtskaitem` | macOS paziņojums ar skaņu, kad pienāk atskaite |
 | `atzimetAutomatiski` | Pēc katra gājiena sesija atzīmē savus ☐ darbus, kas pēc sarunas jau izdarīti |
+| `platums` | Cik rakstzīmju plats panelis atveras. Ja to pats pavelc, tavs izmērs uzvar |
 
 ### Kā tas strādā
 
-- **Dati** nāk no aplikācijas sesiju failiem (statuss, "gaida tevi"), claude-mem datubāzes un sarunas pēdējās daļas. Atjaunojas ik 30 sekundes.
-- **Analīze** iet caur tavu paša Claude sesiju ar Sonnet: ne vairāk kā 3 sesijas reizē, un no jauna tikai tad, ja sesijā kaut kas mainījies un tā 2 minūtes ir klusa. Tas tērē tokenus no tava Claude plāna.
-- **Izdarītie automātiski:** pēc katra gājiena sesija ar īsu Sonnet jautājumu pārbauda savus atvērtos ☐ darbus un atzīmē tos, kas pēc sarunas jau izdarīti ("nosūtīju", darbs pabeigts, vairs nav aktuāls). Tos pašus atzīmē arī parastā analīze. Nav atvērtu darbu, nav jautājuma. Ja modelis kļūdījās, atķeksē atpakaļ.
-- **Atvērt:** analīze redz sesijā rakstītos failus un sarunā minētās saites. https saiti atver pati aplikācija pārlūkā, failu atver failu panelī blakus sarunai (ja nevar, VS Code).
-- **Stāvoklis** (atzīmes, secība, atskaites) glabājas Claude Code spraudņa krātuvē un ir kopīgs visām sesijām.
-- **Privātums:** viss notiek tavā datorā. Sarunu fragmenti aiziet tikai uz modeli caur tavu Claude kontu, tāpat kā parastā sesijā.
+- **Nākamie soļi:** pēc katra gājiena sesija pati sev uzdod īsu jautājumu (`$.model.fork`, kā next-steps). Tā redz visu sarunu no kešatmiņas, tāpēc tas maksā apmēram kā viena īsa atbilde tās sesijas modelī. Atbildē ir līdz 3 nākamajiem promptiem, līdz 2 jauniem darbiem tev un tavi ☐, kas jau izdarīti. Ārējas analīzes un citu sesiju sarunu lasīšanas vairs nav.
+- **Laiks un josla:** gājiena sākumā ātrs modelis (haiku) no tava prompta novērtē minūtes un soļus. Gājiena beigās patiesais ilgums tiek pierakstīts, un nākamās aplēses koriģē pēc tā, cik reizes patiesība atšķīrās no aplēses pēdējos gājienos. Tāpēc josla kļūst precīzāka, jo vairāk strādā. Soļus un to, ko sesija dara tagad, panelis nolasa no sarunas faila.
+- **Izdarītie automātiski:** tie paši, ko sesija pēc gājiena nosauc ("nosūtīju", darbs pabeigts, vairs nav aktuāls). Ja kļūdījās, atķeksē atpakaļ.
+- **Dati** nāk no aplikācijas sesiju failiem (statuss, "gaida tevi"), dzīvo Claude procesu failiem `~/.claude/sessions` (strādā, pabeidza, jautā un kopš kura brīža) un claude-mem. Atjaunojas ik 30 sekundes, bet panelis pārzīmējas tikai tad, kad kaut kas mainījies: spiediens uz vecā zīmējuma pogu aplikācijā pazūd.
+- **Atvērt:** sesija nosauc failus un saites no savas sarunas. https saiti atver pati aplikācija pārlūkā, failu atver failu panelī blakus sarunai (ja nevar, VS Code).
+- **Stāvoklis** (atzīmes, nākamie soļi, atskaites) glabājas Claude Code spraudņa krātuvē un ir kopīgs visām sesijām.
+- **Privātums:** viss notiek tavā datorā. Sarunas aiziet tikai uz modeli caur tavu Claude kontu, tāpat kā parastā sesijā.
 
 ### Darbi no malas
 
@@ -125,9 +131,13 @@ Ieliec moda mapē `.pievienot.json`, un nākamajā atjaunošanā panelis to paņ
 [{ "sesija": "local_… vai sesijas nosaukums", "tev": ["Pārskati līgumu"], "claude": [{ "darbs": "Uzraksti testus", "prompts": "Uzraksti testus jaunajai funkcijai." }], "nonemt": ["Vecs darbs"] }]
 ```
 
+`.komanda.json` ar `{ "tiritClaude": true }` notīra visus nākamos promptus. Sesijas uzrakstīs jaunus pēc sava nākamā gājiena.
+
 ### Ierobežojumi
 
+- Nākamie soļi parādās pēc sesijas nākamā gājiena. Sesijai, kas kopš moda uzstādīšanas nav strādājusi, tie vēl nav.
 - Ievades lauka platumu nosaka aplikācija, garāku to padarīt nevar. Garu tekstu ierakstīt var, lauks ritinās.
+- Pogās der tikai teksts, tāpēc galvenes ikonas (Lucide) ir SVG ar neredzamu pogu virs tām. Terminālī tās ir teksta zīmes.
 - Terminālī nav animāciju un peles virzīšanas: punkts nepulsē, ➤ redzams vienmēr.
 - Testēts ar vienu lietotāju uz macOS.
 
@@ -149,18 +159,19 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 
 You have 10 open sessions, and each one has something half done. The panel collects them into one list:
 
-- **You ☐** are tasks only you can do: a decision, a password, reviewing a draft. Tick them when done.
-- **Claude ▷** are tasks Claude can do on its own. Press ▷ and the task goes to that session, where Claude starts working.
+- **A working session** shows what it is doing now (a file, a command), how many steps it has taken and how long is left, with a bar. When Claude asks you something, you see the question or what it needs your permission for.
+- **☐** are tasks only you can do: a decision, something to look at (a file, draft, artifact, page), sending from your own account, a call. When a session makes something for you to look at, there is always a "Review …" with Open. Tick them when done; ticked ones leave the card after 10 minutes.
+- **▷** are up to 3 next prompts each session writes for itself after every turn, like [next-steps](https://github.com/anthropics/claude-plugins-community). Press ▷ and the prompt goes to that session, where Claude starts working. ✕ dismisses a prompt for good.
 - **Reports** are what a session sends back after ▷. They arrive with a macOS notification and sound.
 - **Not pushed** shows git repos with unpushed commits or changed files. **push** sends the command to the session that worked on the repo.
 
-Sonnet writes the tasks from the session's conversation, the [claude-mem](https://github.com/thedotmack/claude-mem) summary and the app's own status. Your unticked tasks stay until you tick them; a new analysis only adds new ones.
+The session that last finished its work or started asking you something is on top; a session that is still working does not jump around. Next to the title you see **asks you** (Claude waits for your answer or permission) or **working**. ▾ collapses a card to one row right where it is, and it opens by itself as soon as the session finishes something or asks. The colored dot pulses when a card has something new.
 
 ### Requirements
 
 - Claude Code desktop app (macOS) with mods (function hooks), version 2.1.288 or newer
 - `python3` and `git`
-- Optional: claude-mem for sharper next steps
+- Optional: [claude-mem](https://github.com/thedotmack/claude-mem). Its summary shows on a card until the session has next steps of its own
 
 Tested on macOS only: the panel reads the app's session files in `~/Library/Application Support/Claude`, opens files with `open` and shows notifications with `osascript`.
 
@@ -181,7 +192,7 @@ Tested on macOS only: the panel reads the app's session files in `~/Library/Appl
    }
    ```
 
-   `CLAUDE_CODE_PLUGIN_DIR_WATCH` reloads the mod as soon as its files change. The `archive_session` permission is needed for the 🗄 button: in auto mode the classifier otherwise refuses archiving, because a button press is not part of the conversation.
+   `CLAUDE_CODE_PLUGIN_DIR_WATCH` reloads the mod as soon as its files change. The `archive_session` permission is needed for the archive button: in auto mode the classifier otherwise refuses it, because a button press is not part of the conversation.
 3. Open a new session. The panel opens by itself; if you close it, `/darbi` brings it back.
 
 ### Settings
@@ -195,16 +206,19 @@ Set `"valoda": "en"` in `pluginConfigs.valejie-darbi.options` (see the Latvian s
 
 ### How it works
 
-- **Data** comes from the app's session files (status, "waiting for you"), the claude-mem database and the tail of each conversation, refreshed every 30 seconds.
-- **Analysis** runs through your own Claude session with Sonnet: at most 3 sessions at a time, and again only after a session changed and has been quiet for 2 minutes. It uses tokens from your Claude plan.
-- **Done by itself:** after every turn a session asks Sonnet briefly which of its open ☐ tasks the conversation shows are done ("sent it", finished, no longer applies) and ticks them. The regular analysis does the same. No open tasks, no question. If the model got it wrong, untick it. Turn off with `atzimetAutomatiski: false`.
-- **Open:** the analysis sees files the session wrote and links mentioned in the conversation. The app itself opens https links in your browser; files open in the file pane beside the conversation (or VS Code).
-- **State** (ticks, order, reports) lives in the Claude Code plugin store and is shared by all sessions.
-- **Privacy:** everything runs on your machine. Conversation excerpts only go to the model through your own Claude account, as in any session.
+- **Next steps:** after every turn a session asks itself a short question (`$.model.fork`, as next-steps does). It sees the whole conversation from the prompt cache, so it costs about one short reply in that session's model. The answer holds up to 3 next prompts, up to 2 new tasks for you, and which of your ☐ tasks are done. There is no outside analysis and no reading of other sessions' transcripts.
+- **Time and bar:** at the start of a turn a fast model (haiku) estimates minutes and steps from your prompt. At the end the real duration is recorded, and later estimates are corrected by how far reality was off in recent turns, so the bar gets more accurate the more you work. Steps and what the session is doing now come from its conversation file.
+- **Done by itself:** the tasks the session names as done after its turn ("sent it", finished, no longer applies). If it got one wrong, untick it. Turn off with `atzimetAutomatiski: false`.
+- **Data** comes from the app's session files (status, "waiting for you"), the live Claude process files in `~/.claude/sessions` (working, finished, asking, and since when) and claude-mem, refreshed every 30 seconds. The panel only redraws when something changed: a press on a button of an old drawing gets lost in the app.
+- **Open:** the session names files and links from its own conversation. The app itself opens https links in your browser; files open in the file pane beside the conversation (or VS Code).
+- **State** (ticks, next steps, reports) lives in the Claude Code plugin store and is shared by all sessions.
+- **Privacy:** everything runs on your machine. Conversations only go to the model through your own Claude account, as in any session.
 
 ### Limits
 
+- Next steps appear after a session's next turn. A session that has not worked since you installed the mod has none yet.
 - The app sets the width of the input field; text longer than the field still fits, it scrolls.
+- Buttons take text only, so the header icons (Lucide) are SVG with an invisible button on top. In the terminal they are text glyphs.
 - The terminal has no animation or hover: the dot does not pulse and ➤ is always shown.
 - Tested by one user on macOS.
 
