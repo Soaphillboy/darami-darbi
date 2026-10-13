@@ -10,3 +10,4 @@ node_modules/
 .komanda.json
 .pedeja-atvert.json
 .pedeja-ieteiksana.json
+.zimejumi-*.json

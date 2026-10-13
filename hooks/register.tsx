@@ -11,16 +11,32 @@ import type {
   ClaudeDarbs,
   Ilgums,
   Izdariti,
+  Karta,
   Novertejums,
+  PanemtaBalva,
   Repo,
   Sesija,
   TevDarbs,
   ValejieDati,
 } from '../types'
-import { ikonasSvg, joslasSvg, KRASA, poguIkonaSvg, pulsaSvg, punktaSvg } from './ikonas'
+import {
+  aplisSvg,
+  balvasSvg,
+  dienasAplisSvg,
+  ikonasSvg,
+  joslasSvg,
+  KRASA,
+  malasSvg,
+  pilnsAplisSvg,
+  poguIkonaSvg,
+  pulsaSvg,
+  punktaSvg,
+  tukssPunktsSvg,
+  ZALS,
+} from './ikonas'
 import { TEKSTI } from './teksti'
 import type { Teksti } from './teksti'
-import type { PogasIkona, Veids } from './ikonas'
+import type { Balva, PogasIkona, Veids } from './ikonas'
 
 const PANE = 'valejie-darbi'
 const TUKSS: ValejieDati = { sesijas: [], repo: [], laiks: 0, kluda: '' }
@@ -33,6 +49,8 @@ const STORE_ATSKAITES = 'atskaites'
 const STORE_GAIDA_ATSKAITI = 'gaidaAtskaiti'
 // Repo, ko lietotājs paslēpa ar ✕: { ceļš: paraksts }; atgriežas, kad paraksts mainās.
 const STORE_PASLEPTI_REPO = 'pasleptiRepo'
+// "Nenopušots" sadaļa atvērta (pēc noklusējuma sakļauta, kā sānjoslas grupa).
+const STORE_REPO_VALA = 'repoVala'
 // Izdarītie ☐, ko vēl nepateicām tai sesijai: { sesijasId: [darbs] }; nāk līdzi lietotāja nākamajam promptam tur.
 const STORE_PAZINOJUMI = 'pazinojumi'
 // Visi lietotāja atzīmētie darbi pa sesijām (pēdējie 30): sesija tos vairs nepiedāvā.
@@ -50,13 +68,31 @@ const STORE_NOTIKUMI = 'notikumi'
 // Gājiena laika un soļu aplēse (sākumā): { sesijasId: Novertejums }; un pabeigto gājienu vēsture tās korekcijai.
 const STORE_NOVERTEJUMI = 'novertejumi'
 const STORE_ILGUMI = 'ilgumi'
+// Arhivētās no paneļa: { sesijasId: ms }. Aplikācija atzīmi failā ieraksta mazliet vēlāk, tāpēc panelis tās
+// paslēpj uzreiz un neļauj atgriezties, līdz aplikācija tās vairs nerāda (vai ARHIVETIE_MS).
+const STORE_ARHIVETIE = 'arhivetie'
+const ARHIVETIE_MS = 10 * 60 * 1000
+// Kad tu pēdējo reizi biji sesijā (rakstīji tajā vai atvēri no paneļa): { sesijasId: ms }. Vaļā paliek šī un iepriekšējā.
+const STORE_APMEKLETI = 'apmekleti'
+// Tavu ☐ kārta katrā sesijā: { sesijasId: Karta }. Jauna kārta sākas, kad pēc "viss izdarīts" parādās jauns darbs.
+const STORE_KARTAS = 'kartas'
+// Šodien jau paņemtā balva: { diena, panemta }.
+const STORE_BALVAS = 'balvas'
+// ➤ no paneļa: prompts, ko ierakstīt citas sesijas ievades laukā: { sesijasId: { teksts, kad } }. Tā sesija to paņem pati.
+const STORE_AIZPILDIT = 'aizpildit'
+const AIZPILDIT_MS = 10 * 60 * 1000
+const AIZPILDIT_PARBAUDE_MS = 1500
+// Ja gājiens beidzās, bet nākamie soļi pēc tā nav ieteikti (moda kods pārlādējās gājiena vidū), panelis tos ieteic pats.
+const IETEIKT_NOKAVETS_MS = 90 * 1000
+// Ik pēc 10 taviem darbiem dienā balva, pa apli: 10 pauze, 20 kafija, 30 pastaiga, 40 atkal pauze …
+const BALVU_SOLIS = 10
+const BALVAS: readonly Balva[] = ['pauze', 'kafija', 'pastaiga']
 // Sesija bez dzīva procesa, kuras pēdējā darbība ir tik daudz vēlāka par zināmo notikumu, kaut ko darīja nepamanīta.
 const NEREDZETS_MS = 10 * 60 * 1000
 // Cik nākamo promptu sesija iesaka (kā next-steps) un cik tavu atvērto darbu kartītē paliek (jaunākie).
-const MAX_PROMPTI = 3
-const MAX_TEV = 8
+const MAX_PROMPTI = 2
+const MAX_TEV = 3
 // Atzīmēts ☐ vai nosūtīts ▷ vēl redzams tik ilgi (var atķeksēt atpakaļ), tad pazūd no kartītes.
-const ATZIMETIE_PAZUD_MS = 10 * 60 * 1000
 // Paziņojuma rinda panelī pazūd pati pēc šī laika (vai ar ✕).
 const ZINAS_ILGUMS_MS = 60 * 1000
 
@@ -75,6 +111,7 @@ const analizes = atom({ plugin: 'valejie-darbi', key: 'analizes' } as const, {} 
 const izdariti = atom({ plugin: 'valejie-darbi', key: 'izdariti' } as const, {} as Izdariti)
 const atskaites = atom({ plugin: 'valejie-darbi', key: 'atskaites' } as const, {} as Atskaites)
 const pasleptiRepo = atom({ plugin: 'valejie-darbi', key: 'pasleptiRepo' } as const, {} as Record<string, string>)
+const repoVala = atom({ plugin: 'valejie-darbi', key: 'repoVala' } as const, false)
 // Palielinās pēc katra ievadītā darba: ievades lauki uzzīmējas no jauna un tukši.
 const ievadesSkaits = atom({ plugin: 'valejie-darbi', key: 'ievadesSkaits' } as const, 0)
 const redzeti = atom({ plugin: 'valejie-darbi', key: 'redzeti' } as const, {} as Record<string, string>)
@@ -88,8 +125,13 @@ const parbauda = atom({ plugin: 'valejie-darbi', key: 'parbauda' } as const, [] 
 const izversti = atom({ plugin: 'valejie-darbi', key: 'izversti' } as const, [] as string[])
 const zinja = atom({ plugin: 'valejie-darbi', key: 'zinja' } as const, '')
 const zinjaLaiks = atom({ plugin: 'valejie-darbi', key: 'zinjaLaiks' } as const, 0)
+// Pēdējais atzīmētais ☐, ko paziņojuma rindā var atsaukt ('' = nav).
+const atsaukt = atom({ plugin: 'valejie-darbi', key: 'atsaukt' } as const, '')
 const notikumi = atom({ plugin: 'valejie-darbi', key: 'notikumi' } as const, {} as Record<string, number>)
 const novertejumi = atom({ plugin: 'valejie-darbi', key: 'novertejumi' } as const, {} as Record<string, Novertejums>)
+const apmekleti = atom({ plugin: 'valejie-darbi', key: 'apmekleti' } as const, {} as Record<string, number>)
+const kartas = atom({ plugin: 'valejie-darbi', key: 'kartas' } as const, {} as Record<string, Karta>)
+const balvas = atom({ plugin: 'valejie-darbi', key: 'balvas' } as const, { diena: 0, panemta: 0 } as PanemtaBalva)
 
 // Kartītes galvenes pogas: viena zīme katrai (pogā der tikai teksts, ne SVG).
 const IKONA = { saklaut: '▾', izverst: '▸', arhivet: '🗄', pievienot: '+', sutit: '➤' }
@@ -98,7 +140,10 @@ const NEREDZAMA = '⠀⠀'
 // Rindas fons kā sānjoslā (neitrāli pelēks ar caurspīdību, der abām tēmām); šai sesijai spilgtāks.
 const FONS = '#8080801a'
 const FONS_HOVER = '#8080802e'
-const FONS_SIS = '#80808038'
+const FONS_SIS = '#80808059'
+// Rinda, kurā visi tavi darbi izdarīti: viegli zaļa.
+const FONS_IZDARITS = `${ZALS}1f`
+const FONS_IZDARITS_HOVER = `${ZALS}33`
 
 // Aplikācijas sesiju rīki, ko mods izsauc tikai no lietotāja pogas spiediena panelī.
 const POGU_RIKI = new Set([
@@ -121,10 +166,80 @@ const claudeAtslega = (s: Sesija, d: ClaudeDarbs) => `${s.id}|c|${d.darbs}`
  */
 const notikums = (s: Sesija, nt: Record<string, number>) => nt[s.id] ?? s.last
 
-/** Sakļauta ar ▾: viena rinda, līdz sesija pēc tam kaut ko pabeidz vai jautā (tad atveras pati). */
-function isSaklauta(s: Sesija, a: Atzimes, nt: Record<string, number>): boolean {
+/** Dienas sākums (vietējā laikā). */
+function dienasSakums(ms: number): number {
+  const d = new Date(ms)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+type TavaKarta = { izdarits: number; atverts: number; no: number }
+
+/** Tavi ☐ sesijā šajā kārtā (un šodien): cik izdarīti un cik vēl atvērti. Claude prompti ▷ neskaitās. */
+function tavaKarta(s: Sesija, an: Analizes, iz: Izdariti, ka: Record<string, Karta>, tagad: number): TavaKarta {
+  const no = Math.max(ka[s.id]?.sakums ?? 0, dienasSakums(tagad))
+  const prefikss = `${s.id}|t|`
+  const izdarits = Object.entries(iz).filter(([k, kad]) => k.startsWith(prefikss) && kad >= no).length
+  const r = an[s.id]
+  const atverts = r?.isGatava ? Math.min(MAX_TEV, r.tev.filter(d => iz[tevAtslega(s, d)] === undefined).length) : 0
+  return { izdarits, atverts, no }
+}
+
+/** Visi tavi darbi šajā kārtā izdarīti, un sesija tev neko nejautā. */
+const isVissIzdarits = (s: Sesija, k: TavaKarta) => k.atverts === 0 && k.izdarits > 0 && s.stavoklis !== 'waiting'
+
+/** Sesija, kurā biji pirms šīs. */
+function iepriekseja(sesijas: Sesija[], apm: Record<string, number>): string {
+  let id = ''
+  let kad = 0
+  for (const s of sesijas) {
+    const x = apm[s.id] ?? 0
+    if (!s.sis && x > kad) {
+      id = s.id
+      kad = x
+    }
+  }
+  return id
+}
+
+/**
+ * Vaļā tikai sesija, kurā esi, un iepriekšējā; pārējās sakļautas. Kad visi tavi darbi izdarīti, sakļaujas arī tās.
+ * ▸ atver jebkuru (līdz ▾ vai nākamajam "viss izdarīts"), ▾ sakļauj (līdz sesija atkal ko pabeidz vai jautā).
+ */
+function isSaklauta(s: Sesija, a: Atzimes, nt: Record<string, number>, ieprieks: string, isViss: boolean, vissKad: number): boolean {
   const atz = a[s.id]
-  return atz?.veids === 'gatavs' && notikums(s, nt) <= (atz.kad ?? atz.last)
+  const kad = atz?.kad ?? atz?.last ?? 0
+  if (atz?.veids === 'vala') return isViss && vissKad > kad
+  if (atz?.veids === 'gatavs' && notikums(s, nt) <= kad) return true
+  return isViss || !(s.sis || s.id === ieprieks)
+}
+
+/** Šodienas balva pēc tavu izdarīto skaita: sasniegtā un nākamā. */
+function balvaPec(skaits: number): { sasniegts: number; balva: Balva; nakamais: number; nakamaBalva: Balva } {
+  const pakape = Math.floor(skaits / BALVU_SOLIS)
+  const b = (i: number) => BALVAS[(((i - 1) % BALVAS.length) + BALVAS.length) % BALVAS.length] as Balva
+  return { sasniegts: pakape * BALVU_SOLIS, balva: b(pakape), nakamais: (pakape + 1) * BALVU_SOLIS, nakamaBalva: b(pakape + 1) }
+}
+
+/** ➤ no cita paneļa: ieraksta promptu šīs sesijas ievades laukā, lai to var pielāgot pirms sūtīšanas. */
+async function aizpilditGaidoso($: EngineInterface): Promise<void> {
+  const visi = (await lasitStore<Record<string, { teksts: string; kad: number }>>($, STORE_AIZPILDIT)) ?? {}
+  if (Object.keys(visi).length === 0) return
+  const sis = (await read($, dati)).sesijas.find(x => x.sis)
+  const x = sis ? visi[sis.id] : undefined
+  if (!sis || !x) return
+  const { [sis.id]: _panemts, ...citi } = visi
+  await $.store.set(STORE_AIZPILDIT, citi)
+  if ((await $.clock.now()) - x.kad > AIZPILDIT_MS) return
+  await $.prompt.fill({ text: x.teksts })
+}
+
+/** Atceras, ka biji šajā sesijā: tā paliek vaļā arī citu sesiju paneļos kā iepriekšējā. */
+async function apmeklets($: EngineInterface, id: string): Promise<void> {
+  const apm = (await lasitStore<Record<string, number>>($, STORE_APMEKLETI)) ?? {}
+  const nakamie = { ...apm, [id]: await $.clock.now() }
+  await $.store.set(STORE_APMEKLETI, nakamie)
+  await update($, apmekleti, () => nakamie)
 }
 
 /** Kartītes satura paraksts (statuss, darbi, atskaite, pēdējais notikums), lai pamanītu jaunumus. */
@@ -229,6 +344,23 @@ function numuri(x: unknown): number[] {
 
 type Ieteikumi = { prompti: ClaudeDarbs[]; tev: TevDarbs[]; izdariti: number[]; nonemt: number[] }
 
+/** Atbildes sagatavei, kas beidzas ar kolu, atstarpe galā: tur raksti savus vārdus. */
+const atbildesBeigas = (x: string) => (/:$/.test(x) ? `${x} ` : x)
+
+/**
+ * Ko ➤ ieraksta laukā pie tava ☐: sesijas sagatavotā atbilde ("Pārskatīju …. Mans komentārs: "); vecākiem darbiem bez
+ * tās pēc darbības vārda (Pārskati → Pārskatīju …), citādi lūgums palīdzēt. `isPaveikts` = atbilde par izdarītu darbu.
+ */
+function atbildesSagatave(td: TevDarbs): { teksts: string; isPaveikts: boolean } {
+  const palidziba = /^(Palīdzi|Help)\b/i
+  if (td.atbilde) return { teksts: td.atbilde, isPaveikts: !palidziba.test(td.atbilde) }
+  const [vards = '', ...parejais] = td.darbs.split(' ')
+  const pagatne = t.pagatne[vards.toLowerCase()]
+  if (pagatne === undefined) return { teksts: t.izdari(td.darbs, td.sikak), isPaveikts: false }
+  const kas = parejais.join(' ')
+  return { teksts: t.atbildePaveikts(pagatne, kas, /^(izlem|decide)$/i.test(vards)), isPaveikts: true }
+}
+
 /** Sesijas atbilde par nākamajiem soļiem (JSON) → līdz 3 prompti, līdz 2 jauni darbi tev, izdarīto numuri. */
 function parsetIeteikumus(text: string): Ieteikumi | null {
   const sakums = text.indexOf('{')
@@ -237,7 +369,7 @@ function parsetIeteikumus(text: string): Ieteikumi | null {
   try {
     const j = JSON.parse(text.slice(sakums, beigas + 1)) as {
       prompti?: { label?: unknown; prompt?: unknown }[]
-      tev?: { darbs?: unknown; sikak?: unknown; atvert?: unknown }[]
+      tev?: { darbs?: unknown; sikak?: unknown; atvert?: unknown; atbilde?: unknown }[]
       izdariti?: unknown
       nonemt?: unknown
     }
@@ -256,6 +388,7 @@ function parsetIeteikumus(text: string): Ieteikumi | null {
         darbs: isis(tirs(String(d.darbs)), 100),
         sikak: typeof d.sikak === 'string' ? tirs(d.sikak).slice(0, 500) : '',
         atvert: typeof d.atvert === 'string' ? tirs(d.atvert) : '',
+        ...(typeof d.atbilde === 'string' && tirs(d.atbilde) !== '' ? { atbilde: atbildesBeigas(tirs(d.atbilde).slice(0, 300)) } : {}),
       }))
     return { prompti, tev, izdariti: numuri(j.izdariti), nonemt: numuri(j.nonemt) }
   } catch {
@@ -337,6 +470,7 @@ async function lasitStore<T>($: EngineInterface, key: string): Promise<T | undef
 /** Paziņojuma rinda panelī (ar laiku, lai pēc ZINAS_ILGUMS_MS pazūd pati). */
 async function zinot($: EngineInterface, teksts: string): Promise<void> {
   await update($, zinja, () => isis(teksts, 240))
+  await update($, atsaukt, () => '')
   const kad = await $.clock.now()
   await update($, zinjaLaiks, () => kad)
 }
@@ -402,9 +536,32 @@ async function atjaunot($: EngineInterface): Promise<void> {
     return
   }
   const j = JSON.parse(r.stdout) as Pick<ValejieDati, 'sesijas' | 'repo'>
-  // Pārzīmē tikai tad, ja kaut kas mainījies vai virsrakstā jāmaina minūte.
-  const isMainits = JSON.stringify([veca.sesijas, veca.repo, veca.kluda]) !== JSON.stringify([j.sesijas, j.repo, ''])
-  if (isMainits || minute(veca.laiks) !== minute(now)) {
+  const arh = (await lasitStore<Record<string, number>>($, STORE_ARHIVETIE)) ?? {}
+  if (Object.keys(arh).length > 0) {
+    const vel = Object.fromEntries(
+      Object.entries(arh).filter(([id, kad]) => now - kad < ARHIVETIE_MS && j.sesijas.some(s => s.id === id)),
+    )
+    if (!vienads(arh, vel)) await $.store.set(STORE_ARHIVETIE, vel)
+    j.sesijas = j.sesijas.filter(s => vel[s.id] === undefined)
+  }
+  // Pārzīmē tikai tad, ja mainījies kaut kas redzams (vai diena). Katra pārzīmēšana padara vecās pogas nederīgas, un
+  // neaktīvā logā ekrānā paliek vecais zīmējums: pirmais klikšķis tad aiziet tukšā. Tāpēc neskaita pēdējās darbības
+  // laiku (strādājošai sesijai tas mainās nepārtraukti) un sakļauto sesiju gaitu (tā nav redzama).
+  const atzS = (await lasitStore<Atzimes>($, STORE_ATZIMES)) ?? {}
+  const apmS = (await lasitStore<Record<string, number>>($, STORE_APMEKLETI)) ?? {}
+  const ieprieksS = iepriekseja(j.sesijas, apmS)
+  const isRedzama = (s: Sesija) => s.sis || s.id === ieprieksS || atzS[s.id]?.veids === 'vala'
+  const zimejamais = (x: Pick<ValejieDati, 'sesijas' | 'repo'>, kluda: string) =>
+    JSON.stringify([x.sesijas.map(s => ({ ...s, last: 0, gaita: isRedzama(s) ? s.gaita : null })), x.repo, kluda])
+  // Redzamai strādājošai sesijai "vēl ~N min" jāmainās katru minūti.
+  const isRedzamaStrada = j.sesijas.some(s => isRedzama(s) && (s.stavoklis === 'busy' || s.stavoklis === 'shell'))
+  const minute = (ms: number) => Math.floor(ms / 60_000)
+  if (
+    zimejamais(veca, veca.kluda) !== zimejamais(j, '') ||
+    veca.laiks === 0 ||
+    dienasSakums(veca.laiks) !== dienasSakums(now) ||
+    (isRedzamaStrada && minute(veca.laiks) !== minute(now))
+  ) {
     await update($, dati, () => ({ sesijas: j.sesijas, repo: j.repo, laiks: now, kluda: '' }))
   }
 
@@ -418,6 +575,8 @@ async function atjaunot($: EngineInterface): Promise<void> {
   const paslepti = (await lasitStore<Record<string, string>>($, STORE_PASLEPTI_REPO)) ?? {}
   if (!vienads(await read($, atskaites), at)) await update($, atskaites, () => at)
   if (!vienads(await read($, pasleptiRepo), paslepti)) await update($, pasleptiRepo, () => paslepti)
+  const isRepoVala = (await lasitStore<boolean>($, STORE_REPO_VALA)) === true
+  if ((await read($, repoVala)) !== isRepoVala) await update($, repoVala, () => isRepoVala)
   if (!vienads(await read($, analizes), an)) await update($, analizes, () => an)
   if (!vienads(await read($, atzimes), a)) await update($, atzimes, () => a)
   if (!vienads(await read($, izdariti), iz)) await update($, izdariti, () => iz)
@@ -463,14 +622,55 @@ async function atjaunot($: EngineInterface): Promise<void> {
   if (isRedMainits) await $.store.set(STORE_REDZETI, red)
   if (!vienads(await read($, redzeti), red)) await update($, redzeti, () => red)
 
-  if ((await read($, zinja)) !== '' && now - (await read($, zinjaLaiks)) > ZINAS_ILGUMS_MS) await update($, zinja, () => '')
+  if ((await read($, zinja)) !== '' && now - (await read($, zinjaLaiks)) > ZINAS_ILGUMS_MS) {
+    await update($, zinja, () => '')
+    await update($, atsaukt, () => '')
+  }
 
   const repoIzvele = (await lasitStore<Record<string, string>>($, STORE_REPO_SESIJAS)) ?? {}
   if (!vienads(await read($, repoSesijas), repoIzvele)) await update($, repoSesijas, () => repoIzvele)
   const padomi = (await lasitStore<boolean>($, STORE_PADOMI)) ?? radiPadomusNoklusejums
   if ((await read($, radiPadomus)) !== padomi) await update($, radiPadomus, () => padomi)
 
-  const atvertas = j.sesijas.filter(s => !isSaklauta(s, a, nt)).length
+  // Tavu ☐ kārtas: pilna, kad visi izdarīti; jauna sākas, kad pēc tam parādās jauns darbs.
+  const ka = (await lasitStore<Record<string, Karta>>($, STORE_KARTAS)) ?? {}
+  let isKaMainits = false
+  for (const s of j.sesijas) {
+    const k = tavaKarta(s, an, iz, ka, now)
+    const ir = ka[s.id]
+    if (k.atverts === 0 && k.izdarits > 0 && !ir?.pilna) {
+      ka[s.id] = { sakums: ir?.sakums ?? 0, pilna: true, kad: now }
+      isKaMainits = true
+    } else if (k.atverts > 0 && ir?.pilna) {
+      ka[s.id] = { sakums: now, pilna: false, kad: now }
+      isKaMainits = true
+    }
+  }
+  if (isKaMainits) await $.store.set(STORE_KARTAS, ka)
+  if (!vienads(await read($, kartas), ka)) await update($, kartas, () => ka)
+  const apm = (await lasitStore<Record<string, number>>($, STORE_APMEKLETI)) ?? {}
+  if (!vienads(await read($, apmekleti), apm)) await update($, apmekleti, () => apm)
+  const bv = (await lasitStore<PanemtaBalva>($, STORE_BALVAS)) ?? { diena: 0, panemta: 0 }
+  if (!vienads(await read($, balvas), bv)) await update($, balvas, () => bv)
+
+  const sisS = j.sesijas.find(s => s.sis)
+  if (
+    sisS &&
+    sisS.stavoklis === 'idle' &&
+    sisS.stavoklisKops > (an[sisS.id]?.sakts ?? 0) &&
+    now - sisS.stavoklisKops > IETEIKT_NOKAVETS_MS &&
+    sisS.stavoklisKops !== ieteiktsPec &&
+    !(await read($, parbauda)).includes(sisS.id)
+  ) {
+    ieteiktsPec = sisS.stavoklisKops
+    void ieteikt($, atzimetAuto).catch(() => undefined)
+  }
+
+  const ieprieks = iepriekseja(j.sesijas, apm)
+  const atvertas = j.sesijas.filter(s => {
+    const k = tavaKarta(s, an, iz, ka, now)
+    return !isSaklauta(s, a, nt, ieprieks, isVissIzdarits(s, k), ka[s.id]?.pilna ? (ka[s.id]?.kad ?? 0) : 0)
+  }).length
   const jauta = j.sesijas.filter(s => s.stavoklis === 'waiting').length
   const dalas = []
   if (jauta) dalas.push(t.statussJauta(jauta))
@@ -535,6 +735,11 @@ async function pierakstitIlgumu($: EngineInterface, turnId: string, ilgumsMs: nu
 }
 
 let ieteikumuKarta = 0
+// Pēc kura gājiena beigām (stavoklisKops) nākamie soļi jau mēģināti ieteikt no jauna.
+let ieteiktsPec = 0
+let atzimetAuto = true
+// Pēdējais zīmējums katrā vietā un tā ievaddati (sk. ui.render).
+const zimejumuKess = new Map<string, { paraksts: string; koks: RenderElement }>()
 /**
  * Pēc katra gājiena šī sesija pati pasaka nākamos soļus: līdz 3 promptiem, jaunus darbus lietotājam un kuri viņa
  * atvērtie ☐ jau izdarīti. Fork redz visu sarunu no kešatmiņas (cena kā viena īsa atbilde); rezultāts nonāk kopīgajā
@@ -846,6 +1051,7 @@ export const register: Register = (on, options) => {
   repoMapes = typeof options.repoMapes === 'string' ? options.repoMapes : ''
   radiPadomusNoklusejums = options.radiPadomus !== false
   panelaPlatums = Math.max(30, Math.min(200, Math.round(Number(options.platums) || 60)))
+  atzimetAuto = options.atzimetAutomatiski !== false
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'darbi',
@@ -854,6 +1060,7 @@ export const register: Register = (on, options) => {
     })
     void atjaunot($)
     $.clock.every(ATJAUNOT_MS, () => atjaunot($))
+    $.clock.every(AIZPILDIT_PARBAUDE_MS, () => aizpilditGaidoso($).catch(() => undefined))
     if (options.atvertAutomatiski !== false) void $.ui.open({ id: PANE, title: t.panelis, columns: panelaPlatums })
     return next(e)
   })
@@ -910,6 +1117,7 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     const sis = (await read($, dati)).sesijas.find(x => x.sis)
     if (!sis) return next(e)
+    await apmeklets($, sis.id)
     const visi = (await lasitStore<Record<string, string[]>>($, STORE_PAZINOJUMI)) ?? {}
     const darbi = visi[sis.id] ?? []
     if (darbi.length === 0) return next(e)
@@ -952,19 +1160,36 @@ export const register: Register = (on, options) => {
     const izverstie = await read($, izversti)
     const at = await read($, atskaites)
     const paslepti = await read($, pasleptiRepo)
+    const isRepoVala = await read($, repoVala)
     const ievadesNr = await read($, ievadesSkaits)
     const red = await read($, redzeti)
     const nt = await read($, notikumi)
     const nov = await read($, novertejumi)
     const msg = await read($, zinja)
+    const atsauc = await read($, atsaukt)
     const repoIzvele = await read($, repoSesijas)
     const isPadomi = await read($, radiPadomus)
-    // Sesija, kurā esi, ir pati augšā savā sadaļā (ar visiem darbiem), lai pēc pārslēgšanās tās darāmais ir uzreiz redzams.
-    const sisSesija = d.sesijas.find(s => s.sis)
-    const saraksts = kartot(
-      d.sesijas.filter(s => !s.sis),
-      nt,
-    )
+    const ka = await read($, kartas)
+    const apm = await read($, apmekleti)
+    const bv = await read($, balvas)
+    // Ja nekas nav mainījies, atdod to pašu zīmējumu: tad pogām paliek tie paši rokturi, un klikšķis, kas pienāk pēc
+    // aplikācijas pašas pārzīmēšanas (piemēram, aktivizējot logu), vēl trāpa. Katrs jauns koks = jauni rokturi.
+    const kesasAtslega = `${e.surface}\u0000${e.requestId}`
+    const zimesParaksts = JSON.stringify([
+      (e.props as { bodyColumns?: unknown }).bodyColumns,
+      d, a, an, iz, domajosas, izverstie, at, paslepti, isRepoVala, ievadesNr, red, nt, nov, msg, atsauc, repoIzvele, isPadomi, ka, apm, bv,
+    ])
+    const kesa = zimejumuKess.get(kesasAtslega)
+    if (kesa?.paraksts === zimesParaksts) return kesa.koks
+    const irAplikacija = 'Svg' in el
+    // Sesija, kurā esi, stāv sarakstā savā vietā (kā aplikācijas sānjoslā), tikai ar iekrāsotu fonu.
+    const saraksts = kartot(d.sesijas, nt)
+    const ieprieks = iepriekseja(d.sesijas, apm)
+    const kartaS = (s: Sesija) => tavaKarta(s, an, iz, ka, d.laiks)
+    const sakl = (s: Sesija) => {
+      const k = kartaS(s)
+      return isSaklauta(s, a, nt, ieprieks, isVissIzdarits(s, k), ka[s.id]?.pilna ? (ka[s.id]?.kad ?? 0) : 0)
+    }
 
     const pazinot = async (teksts: string) => {
       await zinot($, teksts)
@@ -979,13 +1204,15 @@ export const register: Register = (on, options) => {
       await $.store.set(STORE_REDZETI, nakamie)
       await update($, redzeti, () => nakamie)
     }
+    // Vispirms atver (pārslēgšanās sākas uzreiz), pieraksti pēc tam.
     const atvertSesiju = (s: Sesija) => async () => {
-      await apskatits(s)
       const r = await $.process.run(['open', s.link])
       if (r.exitCode !== 0) await pazinot(t.neizdevasAtvertSesiju(r.stderr))
+      await apmeklets($, s.id)
+      await apskatits(s)
     }
-    // Saite → pārlūks. Fails → Claude aplikācijas failu panelis blakus sarunai; ja tur nevar (nav šīs sesijas
-    // mapē, sesija nav ekrānā), tad VS Code, jo .md pēc noklusējuma atver lēnais Xcode.
+    // Saite → pārlūks. Mape → Finder. Fails → Claude aplikācijas failu panelis blakus sarunai; ja tur nevar (nav šīs
+    // sesijas mapē, sesija nav ekrānā), tad parāda to Finderī (ne VS Code, ne Xcode, kas .md atver lēni).
     const atvertSaiti = (merkis: string) => async () => {
       if (ARTEFAKTS.test(merkis)) {
         const r = (await $.tool.call({ tool: 'Artifact', action: 'open', url: merkis } as never).catch((err: unknown) => ({
@@ -1000,17 +1227,23 @@ export const register: Register = (on, options) => {
         if (r.exitCode !== 0) await pazinot(t.neizdevasAtvertSaiti(r.stderr))
         return
       }
-      const panelis = await ccdRiks($, 'ccd_view', 'show_pane', { pane: 'file', path: merkis })
-      const isPanelis = panelis.isOk && !/nothing|not open|isn't open|outside|not inside|own window/i.test(panelis.teksts)
       // Pēdējais "Atvērt" diskā, lai var nolasīt, ja poga atkal "neko nedara".
       const zurnals = (x: unknown) =>
-        $.fs.write(`${$.plugin.root}/.pedeja-atvert.json`, JSON.stringify({ merkis, panelis, ...(x as object) }, null, 2))
-      if (isPanelis) {
-        await zurnals({ ka: 'failu panelis' })
+        $.fs.write(`${$.plugin.root}/.pedeja-atvert.json`, JSON.stringify({ merkis, ...(x as object) }, null, 2))
+      if ((await $.process.run(['test', '-d', merkis])).exitCode === 0) {
+        const r = await $.process.run(['open', merkis])
+        await zurnals({ ka: 'Finder (mape)', exitCode: r.exitCode, stderr: r.stderr })
+        if (r.exitCode !== 0) await pazinot(t.neizdevasAtvertFailu(r.stderr))
         return
       }
-      const r = await $.process.run(['open', '-a', 'Visual Studio Code', merkis])
-      await zurnals({ ka: 'VS Code', exitCode: r.exitCode, stderr: r.stderr })
+      const panelis = await ccdRiks($, 'ccd_view', 'show_pane', { pane: 'file', path: merkis })
+      const isPanelis = panelis.isOk && !/nothing|not open|isn't open|outside|not inside|own window/i.test(panelis.teksts)
+      if (isPanelis) {
+        await zurnals({ ka: 'failu panelis', panelis })
+        return
+      }
+      const r = await $.process.run(['open', '-R', merkis])
+      await zurnals({ ka: 'Finder', panelis, exitCode: r.exitCode, stderr: r.stderr })
       if (r.exitCode !== 0) await pazinot(t.neizdevasAtvertFailu(r.stderr))
     }
     // Pēdējā sesiju rīka atbilde diskā, lai to var nolasīt, ja kaut kas neiet.
@@ -1018,6 +1251,12 @@ export const register: Register = (on, options) => {
       $.fs.write(`${$.plugin.root}/.pedeja-riks.json`, JSON.stringify({ riks, sesija: s.id, ...r }, null, 2))
     const arhivet = (s: Sesija) => async () => {
       const r = await ccdRiks($, 'ccd_session_mgmt', 'archive_session', { session_id: s.id, reason: t.arhivesanasIemesls })
+      if (r.isOk) {
+        // Uzreiz prom no saraksta (arī citu sesiju paneļos), nevis tikai tad, kad aplikācija ieraksta failu.
+        const arh = (await lasitStore<Record<string, number>>($, STORE_ARHIVETIE)) ?? {}
+        await $.store.set(STORE_ARHIVETIE, { ...arh, [s.id]: await $.clock.now() })
+        await update($, dati, x => ({ ...x, sesijas: x.sesijas.filter(y => y.id !== s.id) }))
+      }
       await pazinot(r.isOk ? t.arhivets(s.title) : t.neizdevasArhivet(isis(s.title, 40), atteikums(r.teksts)))
       await rikaZurnals('archive_session', s, r)
       await atjaunot($)
@@ -1048,9 +1287,27 @@ export const register: Register = (on, options) => {
       return true
     }
     // ➤ pie tava ☐ darba: nosūta to Claude tajā sesijā un pārvērš par nosūtītu promptu ✓ ("nodots").
+    // ➤ pie tava ☐: atver to sesiju un ieraksta darbu tās ievades laukā kā promptu, lai vari pielāgot un nosūtīt.
+    // Citā sesijā promptu ieraksta tās pašas sesijas mods (krātuvē gaida līdz 10 min).
     const nodotClaude = (s: Sesija, td: TevDarbs) => async () => {
-      const prompts = t.izdari(td.darbs, td.sikak)
-      if (!(await sutitSesijai(s, prompts))) return
+      const { teksts: prompts, isPaveikts } = atbildesSagatave(td)
+      if (s.sis) {
+        await $.prompt.fill({ text: prompts })
+        await pazinot(t.ierakstitsLauka)
+      } else {
+        const visi = (await lasitStore<Record<string, { teksts: string; kad: number }>>($, STORE_AIZPILDIT)) ?? {}
+        await $.store.set(STORE_AIZPILDIT, { ...visi, [s.id]: { teksts: prompts, kad: await $.clock.now() } })
+        const r = await $.process.run(['open', s.link])
+        if (r.exitCode !== 0) await pazinot(t.neizdevasAtvertSesiju(r.stderr))
+        else await pazinot(t.ierakstitsSesijas(isis(s.title, 40)))
+        await apmeklets($, s.id)
+      }
+      // Atbilde par paveikto: tavs darbs izdarīts (ieskaitās aplī, var atsaukt). Lūgums palīdzēt: darbs pāriet Claude.
+      if (isPaveikts) {
+        await atzimetTavu(tevAtslega(s, td), td.darbs)
+        await apskatits(s)
+        return
+      }
       const visas = (await lasitStore<Analizes>($, STORE_ANALIZES)) ?? {}
       const r = visas[s.id]
       if (r) {
@@ -1074,7 +1331,7 @@ export const register: Register = (on, options) => {
       await apskatits(s)
       await atzimet($, s, { veids: 'gatavs', last: s.last, kad: await $.clock.now() })
     }
-    const izverst = (s: Sesija) => () => atzimet($, s, undefined)
+    const izverst = (s: Sesija) => async () => atzimet($, s, { veids: 'vala', last: s.last, kad: await $.clock.now() })
 
     const ikona = (v: Veids) =>
       'Svg' in el ? (
@@ -1107,12 +1364,17 @@ export const register: Register = (on, options) => {
       </Box>
     )
 
-    // Punkta krāsa: jautā vai gaida tevi (dzeltens), jāpārskata (violets), var turpināt (zils).
-    const punktaVeids = (s: Sesija): Veids => {
-      if (s.stavoklis === 'waiting') return 'gaida'
-      if (s.status === 'review_ready') return 'parskatit'
-      if (!MIERIGI.has(s.status) || s.needs.trim() !== '') return 'gaida'
-      return s.status === 'nav' ? 'bez' : 'turpinat'
+    // Sesijas punkts, katram viena nozīme: jautā tev (mirgo dzeltens), strādā (mirgo pelēks), ir kaut kas jauns,
+    // ko neesi redzējis (mirgo zils), citādi tukšs aplītis kā sānjoslā.
+    const sesijasPunkts = (s: Sesija) => {
+      if (s.stavoklis === 'waiting') return pulss('gaida')
+      if (s.stavoklis === 'busy' || s.stavoklis === 'shell') return pulss('bez')
+      if (isJauns(s)) return pulss('turpinat')
+      return 'Svg' in el ? (
+        <el.Svg source={tukssPunktsSvg()} alt={t.nekaJauna} width={10} height={10} />
+      ) : (
+        <Text dimColor>○</Text>
+      )
     }
 
     // Pogām nav sava uzraksta, uzbraucot ar peli, tāpēc padoms ir paslēpta kastīte, ko parāda hover (inverse,
@@ -1126,7 +1388,8 @@ export const register: Register = (on, options) => {
           {poga}
           <Box
             position="absolute"
-            top={1}
+            // Virs pogas: zemāk to pārklātu nākamā rinda (tā zīmējas vēlāk).
+            top={-1}
             {...(puse === 'labi' ? { right: 0 } : { left: 0 })}
             width={padoms.length + 2}
             flexShrink={0}
@@ -1282,10 +1545,17 @@ export const register: Register = (on, options) => {
       )
     }
 
-    // Atzīmēts ☐ vai nosūtīts ▷ pēc ATZIMETIE_PAZUD_MS vairs nav redzams (līdz tam to var atķeksēt atpakaļ).
-    const isPazudis = (atslega: string) => {
-      const kad = iz[atslega]
-      return kad !== undefined && d.laiks > 0 && d.laiks - kad > ATZIMETIE_PAZUD_MS
+    // Atzīmēts ☐ vai nosūtīts ▷ pazūd no kartītes uzreiz.
+    const isPazudis = (atslega: string) => iz[atslega] !== undefined
+    // Tā kā ☐ pazūd uzreiz, paziņojuma rindā ir "Atsaukt" (nejaušam klikšķim).
+    const atzimetTavu = async (atslega: string, darbs: string) => {
+      await parslegtIzdaritu($, atslega, true)
+      await zinot($, t.atzimets(darbs))
+      await update($, atsaukt, () => atslega)
+    }
+    const aizvertZinju = async () => {
+      await update($, zinja, () => '')
+      await update($, atsaukt, () => '')
     }
     const darbuRindas = (s: Sesija) => {
       const r = an[s.id]
@@ -1295,8 +1565,15 @@ export const register: Register = (on, options) => {
         return <Text dimColor>{isDoma ? t.doma : rezerve ? isis(rezerve, 200) : t.pecGajiena}</Text>
       }
       // Numurs `i` paliek no pilnā saraksta: pogu atslēgas nemainās, kad atzīmētie pazūd.
-      const tev = r.tev.map((td, i) => ({ td, i })).filter(x => !isPazudis(tevAtslega(s, x.td)))
-      const prompti = r.claude.map((c, i) => ({ c, i })).filter(x => !isPazudis(claudeAtslega(s, x.c)))
+      // Ne vairāk par 3 taviem (jaunākie) un 2 ieteiktiem promptiem; paša pieliktie prompti vienmēr.
+      const tev = r.tev
+        .map((td, i) => ({ td, i }))
+        .filter(x => !isPazudis(tevAtslega(s, x.td)))
+        .slice(-MAX_TEV)
+      const prompti = r.claude
+        .map((c, i) => ({ c, i }))
+        .filter(x => !isPazudis(claudeAtslega(s, x.c)))
+        .filter((x, _, visi) => x.c.pats || visi.filter(y => !y.c.pats).indexOf(x) < MAX_PROMPTI)
       if (tev.length + prompti.length === 0) return <Text dimColor>{isDoma ? t.doma : t.nekasVairs}</Text>
       return (
         <Box flexDirection="column">
@@ -1315,7 +1592,7 @@ export const register: Register = (on, options) => {
                     atvert: td.atvert,
                     isAtzimets,
                     padoms: isAtzimets ? t.padoms.atcelt : t.padoms.izdarits,
-                    onKeksis: () => parslegtIzdaritu($, tevAtslega(s, td), !isAtzimets),
+                    onKeksis: () => atzimetTavu(tevAtslega(s, td), td.darbs),
                     onNodot: nodotClaude(s, td),
                   })
                 })}
@@ -1411,14 +1688,31 @@ export const register: Register = (on, options) => {
     }
     const repoSadala = d.repo.length === 0 ? null : (
       <Box flexDirection="column">
-        {virsraksts('repo', t.nenopusots, redzamieRepo.length)}
-        {pasleptoSkaits > 0 && (
+        {/* Virsraksts ar bultiņu kā sānjoslas grupai; sakļautā redzams tikai skaits. */}
+        <Box flexDirection="row" gap={1} alignItems="center">
+          {virsraksts('repo', t.nenopusots, redzamieRepo.length)}
+          {arPadomu(
+            isRepoVala ? 'repo-saklaut' : 'repo-izverst',
+            isRepoVala ? t.padoms.saklaut : t.padoms.izverst,
+            ikonasPoga({
+              key: isRepoVala ? 'repo-saklaut' : 'repo-izverst',
+              ikona: isRepoVala ? 'saklaut' : 'izverst',
+              padoms: isRepoVala ? t.padoms.saklaut : t.padoms.izverst,
+              onPress: async () => {
+                await $.store.set(STORE_REPO_VALA, !isRepoVala)
+                await update($, repoVala, () => !isRepoVala)
+              },
+            }),
+          )}
+        </Box>
+        {isRepoVala && pasleptoSkaits > 0 && (
           <Box flexDirection="row" gap={1} alignItems="center">
             <Text dimColor>{t.paslepti(pasleptoSkaits)}</Text>
             <Button key="radit-paslepto" plain dimColor label={t.radit} onPress={raditPaslepto} />
           </Box>
         )}
-        {redzamieRepo.map((r, i) => {
+        {isRepoVala &&
+          redzamieRepo.map((r, i) => {
           const id = `repo:${r.cels}`
           const isIzverts = izverstie.includes(id)
           return (
@@ -1616,38 +1910,160 @@ export const register: Register = (on, options) => {
     // Nosaukums saīsināts pēc paneļa platuma, lai pogas labajā pusē vienmēr ir savā vietā.
     const nosaukumaGarums = (s: Sesija) => {
       const uzraksts = s.stavoklis === 'waiting' ? t.jauta.length + 1 : s.stavoklis === 'busy' || s.stavoklis === 'shell' ? t.strada.length + 1 : 0
-      return Math.max(12, kolonnas - 12 - uzraksts)
+      return Math.max(12, kolonnas - 12 - uzraksts - progresaGarums(s))
+    }
+    const isStrada = (s: Sesija) => s.stavoklis === 'busy' || s.stavoklis === 'shell'
+    // Tavu ☐ progress rindā: aplis un "2/3"; kad viss izdarīts, zaļš aplis ar ķeksīti.
+    const progresaTeksts = (s: Sesija) => {
+      const k = kartaS(s)
+      if (k.izdarits + k.atverts === 0) return ''
+      const x = `${k.izdarits}/${k.izdarits + k.atverts}`
+      return isVissIzdarits(s, k) && !irAplikacija ? `✓ ${x}` : x
+    }
+    // Fiksēts platums ("12/13" + aplis), aplis pie pogām: apļi visās rindās stāv vienā kolonnā, skaitļi pa labi.
+    const PROGRESA_PLATUMS = 8
+    const progresaGarums = (s: Sesija) => (progresaTeksts(s) === '' ? 0 : PROGRESA_PLATUMS + 1)
+    const progress = (s: Sesija) => {
+      const k = kartaS(s)
+      const x = progresaTeksts(s)
+      if (x === '') return null
+      const isViss = isVissIzdarits(s, k)
+      return (
+        <Box
+          key={`progress:${s.id}`}
+          flexDirection="row"
+          gap={1}
+          alignItems="center"
+          justifyContent="flex-end"
+          flexShrink={0}
+          width={PROGRESA_PLATUMS}
+        >
+          <Text color={k.izdarits > 0 ? ZALS : undefined} dimColor={k.izdarits === 0}>
+            {x}
+          </Text>
+          {irAplikacija && (
+            <el.Svg
+              source={isViss ? pilnsAplisSvg() : aplisSvg(k.izdarits / (k.izdarits + k.atverts))}
+              alt={isViss ? t.vissIzdarits(k.izdarits) : t.progresaAlt(k.izdarits, k.izdarits + k.atverts)}
+              width={16}
+              height={16}
+            />
+          )}
+        </Box>
+      )
+    }
+    // "3 izdarīti šajā sesijā ▸": uzspiežot redzami pašā kārtā izdarītie tavi darbi (jaunākie augšā).
+    const izdaritieBloks = (s: Sesija) => {
+      const k = kartaS(s)
+      if (k.izdarits === 0) return null
+      const prefikss = `${s.id}|t|`
+      const darbi = Object.entries(iz)
+        .filter(([x, kad]) => x.startsWith(prefikss) && kad >= k.no)
+        .sort((x, y) => y[1] - x[1])
+        .map(([x]) => x.slice(prefikss.length))
+      const id = `${s.id}:izdariti`
+      const isIzverts = izverstie.includes(id)
+      return (
+        <Box flexDirection="column" marginTop={1}>
+          <Box flexDirection="row" gap={1}>
+            <Text color={ZALS}>✓</Text>
+            <Button
+              key={`izdariti:${s.id}`}
+              plain
+              label={`${t.izdaritiSesija(k.izdarits)} ${isIzverts ? '▾' : '▸'}`}
+              onPress={() => update($, izversti, ids => (ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]))}
+            />
+          </Box>
+          {isIzverts &&
+            darbi.slice(0, 5).map((x, i) => (
+              <Text key={`izd:${s.id}:${i}`} dimColor wrap="truncate-end">
+                {`  ✓ ${x}`}
+              </Text>
+            ))}
+          {isIzverts && darbi.length > 5 && <Text dimColor>{`  ${t.unVel(darbi.length - 5)}`}</Text>}
+        </Box>
+      )
     }
 
     const kartite = (s: Sesija) => {
-      const isSakl = isSaklauta(s, a, nt)
+      const isSakl = sakl(s)
       const pogas = galvasPogas(s, isSakl)
+      const isAplikacija = irAplikacija
+      const isViss = isVissIzdarits(s, kartaS(s))
+      // Kā sānjoslā: fons tikai sesijai, kurā esi, un uzbraucot ar peli.
+      const fonsHover = s.sis ? FONS_SIS : isViss ? FONS_IZDARITS : FONS_HOVER
+      const padomsAtvert = s.sis ? t.padoms.sisSesija : isJauns(s) ? t.padoms.jaunasIzmainas : t.padoms.atvertSesiju
+      const nosaukums = isis(s.title, nosaukumaGarums(s))
       return (
         <Box key={`kartite:${s.id}`} flexDirection="column" marginBottom={isSakl ? 0 : 1}>
-          {/* Nosaukuma rinda pa visu platumu ar fonu, kā aplikācijas sānjoslā; sesija, kurā esi, spilgtāka. */}
+          {/* Nosaukuma rinda pa visu platumu ar fonu, kā aplikācijas sānjoslā; sesija, kurā esi, spilgtāka un ar malu. */}
           <Box
             key={`rinda:${s.id}`}
+            position="relative"
             flexDirection="row"
             justifyContent="space-between"
             alignItems="center"
             paddingLeft={1}
-            {...('Svg' in el
-              ? { backgroundColor: s.sis ? FONS_SIS : FONS, hover: { backgroundColor: s.sis ? FONS_SIS : FONS_HOVER } }
+            // Rāmis pats pieliek atstarpes; bez tām rinda ir vienu rindiņu augsta, un neredzamā poga to nosedz visu.
+            paddingTop={0}
+            paddingBottom={0}
+            paddingRight={0}
+            {...(isAplikacija
+              ? {
+                  // Noapaļoti stūri: aplikācija "round" rāmi zīmē ar border-radius; pats rāmis caurspīdīgs.
+                  borderStyle: 'round',
+                  borderColor: '#00000000',
+                  ...(s.sis ? { backgroundColor: FONS_SIS } : {}),
+                  hover: { backgroundColor: fonsHover },
+                }
               : {})}
           >
+            {s.sis && 'Svg' in el && (
+              <Box position="absolute" top={0} bottom={0} left={0} alignItems="center">
+                <el.Svg source={malasSvg()} alt="" width={6} height={16} />
+              </Box>
+            )}
             <Box flexDirection="row" gap={1} alignItems="center" flexShrink={1} flexGrow={1}>
-              {isJauns(s) ? pulss(punktaVeids(s)) : punkts(punktaVeids(s))}
-              {arPadomu(
-                `atvert:${s.id}`,
-                s.sis ? t.padoms.sisSesija : isJauns(s) ? t.padoms.jaunasIzmainas : t.padoms.atvertSesiju,
-                <Button key={`atvert:${s.id}`} plain label={isis(s.title, nosaukumaGarums(s))} onPress={atvertSesiju(s)} />,
-                'kreisi',
+              {sesijasPunkts(s)}
+              {isAplikacija ? (
+                <Text key={`nosaukums:${s.id}`} bold={s.sis} wrap="truncate-end">
+                  {nosaukums}
+                </Text>
+              ) : (
+                arPadomu(`atvert:${s.id}`, padomsAtvert, <Button key={`atvert:${s.id}`} plain label={nosaukums} onPress={atvertSesiju(s)} />, 'kreisi')
               )}
               {/* Ko sesija dara tagad: jautā tev (vai gaida atļauju) vai vēl strādā. */}
               {s.stavoklis === 'waiting' && <Text color={KRASA.gaida}>{t.jauta}</Text>}
               {(s.stavoklis === 'busy' || s.stavoklis === 'shell') && <Text dimColor>{t.strada}</Text>}
             </Box>
-            <Box flexDirection="row" gap={1} alignItems="center" flexShrink={0}>
+            {progress(s)}
+            {/* Aplikācijā visa rinda atver sesiju: neredzama poga pāri visam platumam (pogā der tikai teksts);
+                pogas labajā pusē ir vēlāk un stāv virs tās. */}
+            {isAplikacija && (
+              <Box key={`p:atvert:${s.id}`} position="absolute" top={0} bottom={0} left={0} width="100%">
+                {/* Pogai platums nav ierobežots (citādi tā savu neredzamo tekstu nogriež ar "…"); lieko nogriež ārējā kaste. */}
+                <Box position="relative" width="100%" height="100%" overflow="hidden">
+                  <Box position="absolute" top={0} left={0}>
+                    <Button key={`atvert:${s.id}`} plain label={'⠀'.repeat(kolonnas + 20)} onPress={atvertSesiju(s)} />
+                  </Box>
+                </Box>
+                {isPadomi && (
+                  <Box position="absolute" top={-1} left={0} width={padomsAtvert.length + 2} display="none" hover={{ display: 'flex' }}>
+                    <Text inverse wrap="truncate-end">{` ${padomsAtvert} `}</Text>
+                  </Box>
+                )}
+              </Box>
+            )}
+            {/* Vienmēr vieta divām pogām (arī ja arhivēt nav), lai apļi un pogas visās rindās stāv vienās kolonnās. */}
+            <Box
+              position="relative"
+              flexDirection="row"
+              gap={1}
+              alignItems="center"
+              justifyContent="flex-end"
+              flexShrink={0}
+              {...(isAplikacija ? { width: 7 } : {})}
+            >
               {pogas.map(p => arPadomu(p.key, p.padoms, ikonasPoga(p)))}
             </Box>
           </Box>
@@ -1656,6 +2072,7 @@ export const register: Register = (on, options) => {
             <Box flexDirection="column" marginLeft={1}>
               {ievadesRinda(s)}
               {darbuRindas(s)}
+              {izdaritieBloks(s)}
               {atskaitesBloks(s)}
             </Box>
           )}
@@ -1680,27 +2097,70 @@ export const register: Register = (on, options) => {
         ]
       })
 
-    const atvertas = saraksts.filter(s => !isSaklauta(s, a, nt)).length
+
+    // Dienas rezultāts: tavi ☐ šodien visās sesijās un aplis līdz nākamajai balvai. Sasniedzot desmitu, balva.
+    const sodien = Object.entries(iz).filter(([k, kad]) => k.includes('|t|') && kad >= dienasSakums(d.laiks)).length
+    const velGaida = saraksts.reduce((n, s) => n + kartaS(s).atverts, 0)
+    const bp = balvaPec(sodien)
+    const isBalva = bp.sasniegts >= BALVU_SOLIS && !(bv.diena === dienasSakums(d.laiks) && bv.panemta >= bp.sasniegts)
+    const panemtBalvu = async () => {
+      const nakama = { diena: dienasSakums(await $.clock.now()), panemta: bp.sasniegts }
+      await $.store.set(STORE_BALVAS, nakama)
+      await update($, balvas, () => nakama)
+    }
+    const cikls = Math.floor((bp.sasniegts / BALVU_SOLIS - 1) / BALVAS.length)
+    const kapnes = BALVAS.map((b, i) => {
+      const n = (cikls * BALVAS.length + i + 1) * BALVU_SOLIS
+      return `${n <= bp.sasniegts ? '✓ ' : ''}${n} ${t.balvuNosaukumi[b]}`
+    }).join(' · ')
+    const ramis = (ar: { fons: string; mala?: string }) =>
+      irAplikacija ? { borderStyle: 'round', borderColor: ar.mala ?? '#00000000', backgroundColor: ar.fons } : {}
+    const dienasBloks =
+      d.laiks === 0 ? null : isBalva ? (
+        <Box key="balva" flexDirection="column" alignItems="center" gap={1} paddingY={1} {...ramis({ fons: FONS_IZDARITS, mala: `${ZALS}55` })}>
+          {'Svg' in el && <el.Svg source={balvasSvg(bp.balva)} alt={t.balvuNosaukumi[bp.balva]} width={112} height={112} isInteractive />}
+          <Text bold color={ZALS}>
+            {t.balvaVirsraksts(bp.sasniegts)}
+          </Text>
+          <Text wrap="wrap">{t.balvaTeksts[bp.balva]}</Text>
+          <Button key="balva" label={t.balvaPoga[bp.balva]} onPress={panemtBalvu} />
+          <Text dimColor wrap="wrap">
+            {kapnes}
+          </Text>
+        </Box>
+      ) : (
+        <Box key="diena" flexDirection="row" gap={1} alignItems="center" paddingLeft={1} paddingRight={1} {...ramis({ fons: FONS_IZDARITS })}>
+          {'Svg' in el ? (
+            <el.Svg source={dienasAplisSvg(sodien, bp.nakamais)} alt={t.sodienIzdariti(sodien)} width={40} height={40} />
+          ) : (
+            <Text bold color={ZALS}>{`${sodien}/${bp.nakamais}`}</Text>
+          )}
+          <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
+            <Text bold wrap="truncate-end">
+              {t.sodienIzdariti(sodien)}
+            </Text>
+            <Text dimColor wrap="truncate-end">
+              {t.lidzBalvai(bp.nakamais - sodien, bp.nakamaBalva)}
+            </Text>
+          </Box>
+          {velGaida > 0 && (
+            <Box flexShrink={0}>
+              <Text dimColor>{t.velGaida(velGaida)}</Text>
+            </Box>
+          )}
+        </Box>
+      )
     const gaidaSadala = (
       <Box flexDirection="column">
-        {virsraksts('gaida', t.gaidaTevi, atvertas)}
         {saraksts.length === 0 && <Text dimColor>{t.nekasNegaida}</Text>}
         {arDatumiem(saraksts)}
       </Box>
     )
 
-    return (
+    const koks = (
       <Box flexDirection="column" gap={1}>
-        <Box flexDirection="row" gap={1} alignItems="center">
-          <Text dimColor>{d.laiks ? `${t.atjaunots} ${laiks(d.laiks)}` : t.ielade}</Text>
-          {arPadomu('atjaunot', t.atjaunot, <Button key="atjaunot" plain dimColor label="↻" onPress={() => atjaunot($)} />, 'kreisi')}
-        </Box>
-        {sisSesija && (
-          <Box flexDirection="column">
-            {virsraksts(punktaVeids(sisSesija), t.padoms.sisSesija, 1)}
-            {kartite(sisSesija)}
-          </Box>
-        )}
+        {/* Bez pulksteņa un ↻: panelis atjaunojas pats (ik 30 s un pēc gājiena), ar rokām /darbi. */}
+        {d.laiks === 0 && <Text dimColor>{t.ielade}</Text>}
         {d.kluda !== '' && <Text color="red">{d.kluda}</Text>}
         {msg !== '' && (
           <Box flexDirection="row" gap={1} alignItems="flex-start">
@@ -1709,13 +2169,27 @@ export const register: Register = (on, options) => {
                 {msg}
               </Text>
             </Box>
-            {arPadomu('zinja-x', t.padoms.aizvert, <Button key="zinja-x" plain dimColor label="✕" onPress={() => update($, zinja, () => '')} />)}
+            {atsauc !== '' && (
+              <Button
+                key="atsaukt"
+                plain
+                label={t.atsaukt}
+                onPress={async () => {
+                  await parslegtIzdaritu($, atsauc, false)
+                  await aizvertZinju()
+                }}
+              />
+            )}
+            {arPadomu('zinja-x', t.padoms.aizvert, <Button key="zinja-x" plain dimColor label="✕" onPress={aizvertZinju} />)}
           </Box>
         )}
 
+        {dienasBloks}
         {gaidaSadala}
         {repoSadala}
       </Box>
     )
+    zimejumuKess.set(kesasAtslega, { paraksts: zimesParaksts, koks })
+    return koks
   })
 }

@@ -56,6 +56,76 @@ export function punktaSvg(v: Veids): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="${KRASA[v]}"/></svg>`
 }
 
+/** Tukšs aplītis sesijai, kurā nekā jauna nav (kā aplikācijas sānjoslā). */
+export function tukssPunktsSvg(): string {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="3.6" fill="none" stroke="#8A8A8A" stroke-width="1.4"/></svg>'
+}
+
+/** Šaura krāsaina mala sesijai, kurā esi (kā atzīme sānjoslā). */
+export function malasSvg(): string {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="6" height="16" viewBox="0 0 6 16"><rect x="2.5" width="3" height="16" rx="1.5" fill="#D97757"/></svg>'
+}
+
+/** Zaļā krāsa izdarītajam: apļi, "Viss izdarīts", dienas rezultāts un balva. */
+export const ZALS = '#3DCB7F'
+const APLIS = 47.12
+const DIENAS_APLIS = 131.95
+
+/** Mazs progresa aplis pie sesijas: kāda daļa tavu ☐ šajā kārtā izdarīta. */
+export function aplisSvg(dala: number): string {
+  const loks = Math.max(0, Math.min(1, dala)) * APLIS
+  const pilda =
+    loks > 0
+      ? `<circle cx="10" cy="10" r="7.5" fill="none" stroke="${ZALS}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${loks.toFixed(1)} ${APLIS}" transform="rotate(-90 10 10)"/>`
+      : ''
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5" fill="none" stroke="#8080804d" stroke-width="3"/>${pilda}</svg>`
+}
+
+/** Pilns aplis ar ķeksīti: visi tavi darbi šajā kārtā izdarīti. */
+export function pilnsAplisSvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="${ZALS}"/><path d="m6.5 10.2 2.4 2.4 4.6-4.8" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+}
+
+/** Dienas aplis: šodien izdarītie tavi darbi pret nākamo balvu, skaitlis vidū. */
+export function dienasAplisSvg(skaits: number, merkis: number): string {
+  const loks = Math.max(0, Math.min(1, skaits / merkis)) * DIENAS_APLIS
+  const pilda =
+    loks > 0
+      ? `<circle cx="26" cy="26" r="21" fill="none" stroke="${ZALS}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${loks.toFixed(1)} ${DIENAS_APLIS}" transform="rotate(-90 26 26)"/>`
+      : ''
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 52 52"><circle cx="26" cy="26" r="21" fill="none" stroke="#8080804d" stroke-width="5"/>${pilda}<text x="26" y="27" text-anchor="middle" dominant-baseline="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="700" fill="${ZALS}">${skaits}</text></svg>`
+}
+
+export type Balva = 'pauze' | 'kafija' | 'pastaiga'
+
+// Lucide: armchair, coffee, footprints. Kafijai tvaiks (trīs īsās līnijas) kūp.
+const BALVU_CELI: Record<Balva, string> = {
+  pauze:
+    '<path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"/><path d="M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z"/><path d="M5 18v2"/><path d="M19 18v2"/>',
+  kafija:
+    '<path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/>' +
+    ['M6 2v2', 'M10 2v2', 'M14 2v2']
+      .map((d, i) => `<path d="${d}" opacity="0"><animate attributeName="opacity" values="0;1;0" dur="2.2s" begin="${(1.2 + i * 0.6).toFixed(1)}s" repeatCount="indefinite"/></path>`)
+      .join(''),
+  pastaiga:
+    '<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/>',
+}
+
+/**
+ * Balva, kad šodien sasniegts kārtējais desmits: aplis piepildās līdz galam, no tā izšaujas dzirksteles, vidū
+ * parādās balvas ikona un pašūpojas. Interaktīvs SVG (animācija), tāpēc ar `color-scheme`.
+ */
+export function balvasSvg(balva: Balva): string {
+  const krasas = [ZALS, '#E5A00D', ZALS, '#D97757']
+  const dzirksteles = [0, 45, 90, 135, 180, 225, 270, 315]
+    .map(
+      (l, i) =>
+        `<g transform="rotate(${l} 26 26)"><circle cx="26" cy="3" r="1.8" fill="${krasas[i % 4]}" opacity="0"><animate attributeName="cy" values="4;-9" dur="1.4s" begin="1.1s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1.4s" begin="1.1s" repeatCount="indefinite"/></circle></g>`,
+    )
+    .join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="-10 -10 72 72"><style>:root{color-scheme:light dark}</style><circle cx="26" cy="26" r="21" fill="none" stroke="#8080803d" stroke-width="4"/><circle cx="26" cy="26" r="21" fill="none" stroke="${ZALS}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${DIENAS_APLIS} ${DIENAS_APLIS}" stroke-dashoffset="0" transform="rotate(-90 26 26)"><animate attributeName="stroke-dashoffset" from="${(DIENAS_APLIS * 0.3).toFixed(1)}" to="0" dur="1.2s" fill="freeze"/></circle>${dzirksteles}<g opacity="0"><animate attributeName="opacity" from="0" to="1" begin="0.9s" dur="0.4s" fill="freeze"/><g transform="translate(14 14)" fill="none" stroke="${ZALS}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><g>${BALVU_CELI[balva]}<animateTransform attributeName="transform" type="rotate" values="0 12 20;-8 12 20;7 12 20;0 12 20;0 12 20" keyTimes="0;0.1;0.2;0.3;1" dur="2.8s" begin="1.3s" repeatCount="indefinite"/></g></g></g></svg>`
+}
+
 /**
  * Pulsējošs punkts jaunām izmaiņām (SMIL animācija; aplikācija to zīmē kā interaktīvu SVG atsevišķā rāmī).
  * `color-scheme: light dark`: citādi tumšajā tēmā rāmis ar gaišo shēmu dabū necaurspīdīgu baltu fonu.

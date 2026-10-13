@@ -47,7 +47,14 @@ export type ValejieDati = { sesijas: Sesija[]; repo: Repo[]; laiks: number; klud
  * lietotāja paša atzīme sesijai: `gatavs` = sakļauta ar ▾, līdz sesija pēc atzīmes (`kad`) kaut ko pabeidz vai jautā.
  * `turpinat` ir no vecākas versijas un vairs neko nemaina.
  */
-export type Atzime = { veids: 'turpinat' | 'gatavs'; last: number; kad?: number }
+/** `gatavs` = sakļauta ar ▾ (līdz nākamajam notikumam), `vala` = atvērta ar ▸ (līdz ▾ vai nākamajam "viss izdarīts"). */
+export type Atzime = { veids: 'turpinat' | 'gatavs' | 'vala'; last: number; kad?: number }
+
+/** Tavu ☐ kārta sesijā: kopš `sakums` skaita izdarītos; `pilna`, kad visi izdarīti (`kad` = tas brīdis). */
+export type Karta = { sakums: number; pilna: boolean; kad: number }
+
+/** Šodien jau paņemtā balva: dienas sākums un darbu skaits, pie kura to paņēmi. */
+export type PanemtaBalva = { diena: number; panemta: number }
 
 export type Atzimes = Record<string, Atzime>
 
@@ -55,7 +62,7 @@ export type Atzimes = Record<string, Atzime>
  * Darbs lietotājam; `sikak` ir 1-2 teikumi ar detaļām (rāda, izvēršot); `atvert` ir pārbaudīts faila ceļš vai
  * https saite (brīfs, melnraksts), vai tukšs.
  */
-export type TevDarbs = { darbs: string; sikak: string; atvert: string }
+export type TevDarbs = { darbs: string; sikak: string; atvert: string; atbilde?: string }
 
 /**
  * Nākamais prompts tajā sesijā: `darbs` ir īsais teksts pogai, `prompts` ir tas, ko nosūtīt. Sesija tos pēc katra
@@ -106,6 +113,11 @@ declare module 'claude-code' {
       izversti: string[]
       zinja: string
       zinjaLaiks: number
+      atsaukt: string
+      apmekleti: Record<string, number>
+      kartas: Record<string, Karta>
+      balvas: PanemtaBalva
+      repoVala: boolean
       notikumi: Record<string, number>
       novertejumi: Record<string, Novertejums>
     }
