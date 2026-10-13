@@ -1,6 +1,6 @@
 {
   "name": "valejie-darbi",
-  "version": "0.12.3",
+  "version": "0.12.4",
   "description": "Darāmie darbi: sānu panelis ar visu Claude sesiju darbiem (tev ☐, 2 nākamie prompti ▷, progress, dienas balvas), atskaites, nenopušoti repo",
   "author": {
     "name": "Edgars Feščenko"

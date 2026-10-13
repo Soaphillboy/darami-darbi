@@ -65,6 +65,7 @@ Pārbaudīts tikai uz macOS: panelis lasa aplikācijas sesiju failus `~/Library/
 
 | Poga | Ko dara |
 |---|---|
+| + augšā | Atver jaunas sesijas ekrānu (kreiso paneli nevajag) |
 | Nosaukuma rinda | Klikšķis jebkurā vietā rindā atver sesiju. Kā sānjoslā fons ir tikai sesijai, kurā esi (ar treknu nosaukumu un krāsainu malu), un uzbraucot ar peli |
 | N izdarīti šajā sesijā ▸ | Parāda šajā kārtā izdarītos tavus darbus |
 | Balvas poga | Paņem balvu; dienas aplis turpina līdz nākamajai |

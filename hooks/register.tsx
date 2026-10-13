@@ -81,6 +81,7 @@ const STORE_BALVAS = 'balvas'
 // ➤ no paneļa: prompts, ko ierakstīt citas sesijas ievades laukā: { sesijasId: { teksts, kad } }. Tā sesija to paņem pati.
 const STORE_AIZPILDIT = 'aizpildit'
 const AIZPILDIT_MS = 10 * 60 * 1000
+const JAUNA_SESIJA = 'claude://claude.ai/epitaxy'
 const AIZPILDIT_PARBAUDE_MS = 1500
 // Ja gājiens beidzās, bet nākamie soļi pēc tā nav ieteikti (moda kods pārlādējās gājiena vidū), panelis tos ieteic pats.
 const IETEIKT_NOKAVETS_MS = 90 * 1000
@@ -1204,6 +1205,11 @@ export const register: Register = (on, options) => {
       await $.store.set(STORE_REDZETI, nakamie)
       await update($, redzeti, () => nakamie)
     }
+    // Jaunas sesijas ekrāns aplikācijā (tas pats maršruts, uz kuru ved sesiju saites, bez sesijas ID).
+    const jaunaSesija = async () => {
+      const r = await $.process.run(['open', JAUNA_SESIJA])
+      if (r.exitCode !== 0) await pazinot(t.neizdevasAtvertSesiju(r.stderr))
+    }
     // Vispirms atver (pārslēgšanās sākas uzreiz), pieraksti pēc tam.
     const atvertSesiju = (s: Sesija) => async () => {
       const r = await $.process.run(['open', s.link])
@@ -2148,6 +2154,10 @@ export const register: Register = (on, options) => {
               <Text dimColor>{t.velGaida(velGaida)}</Text>
             </Box>
           )}
+          {/* + atver jaunas sesijas ekrānu, lai kreiso paneli nevajag. Bez padoma: virs pirmās rindas to nogrieztu. */}
+          <Box flexShrink={0}>
+            {ikonasPoga({ key: 'jauna-sesija', ikona: 'pievienot', padoms: t.padoms.jaunaSesija, onPress: jaunaSesija })}
+          </Box>
         </Box>
       )
     const gaidaSadala = (

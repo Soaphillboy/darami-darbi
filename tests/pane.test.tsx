@@ -1387,3 +1387,12 @@ test('punkts: jautā tev mirgo dzeltens, strādā mirgo pelēks', async ($, on) 
     Object.assign(sesijaC, { stavoklis: '', stavoklisKops: 0 })
   }
 })
+
+test('+ augšā atver jaunas sesijas ekrānu', async ($, on) => {
+  const d = dzinejs(on)
+  const ui = await $.ui.mount({ plugin: 'valejie-darbi', surface: 'desktop', ...PANE } as any)
+  await atjauno($)
+  await ui.press({ key: 'jauna-sesija' } as any)
+  expect(d.palaisti.at(-1)).toEqual(['open', 'claude://claude.ai/epitaxy'])
+  await ui.unmount()
+})
